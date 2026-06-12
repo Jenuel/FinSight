@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+import dj_database_url
 
 # Load environment variables from .env file
 load_dotenv()
@@ -50,6 +51,7 @@ INSTALLED_APPS = [
 
     # Local apps
     'accounts.apps.AccountsConfig',
+    'transactions.apps.TransactionsConfig',
 ]
 
 MIDDLEWARE = [
@@ -86,8 +88,18 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+db_url = os.getenv('DATABASE_URL')
 db_host = os.getenv('DB_HOST')
-if db_host:
+
+if db_url:
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=db_url,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    }
+elif db_host:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
