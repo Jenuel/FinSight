@@ -5,6 +5,7 @@ import { FinanceProvider } from '@/lib/context';
 import { DashboardPage } from '@/components/pages/dashboard-page';
 import { AccountsPage } from '@/components/pages/accounts-page';
 import { TransactionsPage } from '@/components/pages/transactions-page';
+import { AnalyticsPage } from '@/components/pages/analytics-page';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -51,7 +52,7 @@ export default function Home() {
           />
         );
       case 'analytics':
-        return <></>;
+        return <AnalyticsPage />;
       default:
         return <DashboardPage />;
     }
