@@ -5,6 +5,7 @@ import { Plus, Edit2, Trash2, Check } from 'lucide-react';
 import { useFinance } from '@/lib/context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button-custom';
+import { Badge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -12,19 +13,27 @@ import { ACCOUNT_COLORS } from '@/lib/types';
 
 const ACCOUNT_ICONS = ['🏦', '💳', '🐷', '💰', '💵', '📈', '💼', '🛡️', '🚀', '🏠', '🪙', '🔑'];
 
-const getMaskedNumber = (id: string) => {
-    let hash = 0;
-    for (let i = 0; i < id.length; i++) {
-        hash = id.charCodeAt(i) + ((hash << 5) - hash);
+const formatWithCommas = (value: string) => {
+    // Remove all non-digits except decimals
+    const cleanValue = value.replace(/[^\d.]/g, '');
+    // Split decimal parts
+    const parts = cleanValue.split('.');
+    // Add commas to the integer part
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    // Restrict to max 2 decimal places
+    if (parts[1] !== undefined) {
+        parts[1] = parts[1].substring(0, 2);
     }
-    const digits = Math.abs(hash % 10000).toString().padStart(4, '8');
-    return `•••• ${digits}`;
+    return parts.join('.');
 };
 
 export function AccountsPage() {
     const { state, addAccount, updateAccount, deleteAccount } = useFinance();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [balanceInput, setBalanceInput] = useState('');
+    const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
+    const [confirmNameInput, setConfirmNameInput] = useState('');
     const [formData, setFormData] = useState({
         name: '',
         type: 'checking' as 'checking' | 'savings' | 'credit',
@@ -37,7 +46,7 @@ export function AccountsPage() {
         let defaultIcon = '🏦';
         if (type === 'savings') defaultIcon = '🐷';
         if (type === 'credit') defaultIcon = '💳';
-        
+ 
         setFormData((prev) => ({
             ...prev,
             type,
@@ -51,19 +60,26 @@ export function AccountsPage() {
 
         if (!formData.name.trim()) return;
 
+        const numericBalance = parseFloat(balanceInput.replace(/,/g, '')) || 0;
+        const submitData = {
+            ...formData,
+            balance: numericBalance,
+        };
+
         if (editingId) {
-            updateAccount(editingId, formData);
+            updateAccount(editingId, submitData);
             setEditingId(null);
         } else {
             addAccount({
                 id: `acc-${Date.now()}`,
-                ...formData,
+                ...submitData,
                 currency: 'USD',
                 createdAt: new Date().toISOString(),
             });
         }
 
         setFormData({ name: '', type: 'checking', color: ACCOUNT_COLORS[0], icon: '🏦', balance: 0 });
+        setBalanceInput('');
         setIsModalOpen(false);
     };
 
@@ -77,6 +93,7 @@ export function AccountsPage() {
                 icon: account.icon || '🏦',
                 balance: account.balance,
             });
+            setBalanceInput(account.balance === 0 ? '' : formatWithCommas(account.balance.toString()));
             setEditingId(id);
             setIsModalOpen(true);
         }
@@ -86,6 +103,7 @@ export function AccountsPage() {
         setIsModalOpen(false);
         setEditingId(null);
         setFormData({ name: '', type: 'checking', color: ACCOUNT_COLORS[0], icon: '🏦', balance: 0 });
+        setBalanceInput('');
     };
 
     const totalBalance = state.accounts.reduce((sum, acc) => sum + acc.balance, 0);
@@ -116,96 +134,60 @@ export function AccountsPage() {
                 </Card>
             )}
 
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                 {state.accounts.map((account) => {
-                    const lastFour = getMaskedNumber(account.id);
-                    
                     return (
                         <div
                             key={account.id}
                             style={{
-                                backgroundColor: account.color,
-                                backgroundImage: 'linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(0, 0, 0, 0.35) 100%)',
-                                boxShadow: `0 10px 25px -5px ${account.color}33`,
-                                '--glow-color': `${account.color}50`,
-                            } as React.CSSProperties}
-                            className="group relative overflow-hidden rounded-2xl p-5 text-white transition-all duration-300 hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_15px_30px_var(--glow-color)] aspect-[1.75/1] max-w-sm w-full select-none border border-white/10"
+                                borderTop: `3px solid ${account.color}`,
+                            }}
+                            className="group relative bg-card text-card-foreground border-2 border-neutral-300 dark:border-neutral-700 rounded-xl p-4 flex flex-col justify-between transition-all duration-200 hover:shadow-md select-none"
                         >
-                            {/* Card Gloss reflection overlay */}
-                            <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/10 pointer-events-none" />
-
-                            {/* Top row */}
-                            <div className="flex items-start justify-between">
-                                <div className="space-y-0.5 min-w-0 pr-2">
-                                    <h3 className="text-base font-bold text-white tracking-wide truncate" title={account.name}>
-                                        {account.name}
-                                    </h3>
-                                    <p className="text-[10px] text-white/65 tracking-wider capitalize font-medium">{account.type} Account</p>
+                            {/* Top header: Icon, Name, and Edit/Delete Actions */}
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                    <span className="text-xl shrink-0">{account.icon || '🏦'}</span>
+                                    <div className="min-w-0">
+                                        <h3 className="text-lg font-bold text-foreground tracking-tight truncate" title={account.name}>
+                                            {account.name}
+                                        </h3>
+                                    </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 shrink-0">
-                                    {/* Action buttons sliding out on hover */}
-                                    <div className="flex gap-1.5 opacity-100 md:opacity-0 md:translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 z-20">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleEdit(account.id);
-                                            }}
-                                            className="p-1.5 rounded-full bg-white/15 hover:bg-white/30 border border-white/20 text-white backdrop-blur-md transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center"
-                                            title="Edit Account"
-                                        >
-                                            <Edit2 className="w-3 h-3" />
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (window.confirm('Are you sure you want to delete this account and all its transactions?')) {
-                                                    deleteAccount(account.id);
-                                                }
-                                            }}
-                                            className="p-1.5 rounded-full bg-rose-500/25 hover:bg-rose-500/40 border border-rose-500/30 text-rose-100 hover:text-white backdrop-blur-md transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center"
-                                            title="Delete Account"
-                                        >
-                                            <Trash2 className="w-3 h-3" />
-                                        </button>
-                                    </div>
-
-                                    {/* Account icon */}
-                                    <div className="w-8 h-8 rounded-full bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center text-base shadow-inner z-10">
-                                        {account.icon || '🏦'}
-                                    </div>
+                                {/* Actions */}
+                                <div className="flex gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleEdit(account.id);
+                                        }}
+                                        className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+                                        title="Edit Account"
+                                    >
+                                        <Edit2 className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setDeletingAccountId(account.id);
+                                        }}
+                                        className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                                        title="Delete Account"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
                                 </div>
                             </div>
 
-                            {/* Middle Row (Balance) */}
-                            <div className="my-1.5">
-                                <span className="text-[9px] tracking-wider text-white/50 uppercase font-medium">Available Balance</span>
-                                <div className="text-xl font-bold tracking-tight text-white">
+                            {/* Main Display: Balance */}
+                            <div className="mt-3">
+                                <p className="text-3xl font-extrabold tracking-tight text-foreground">
                                     ${account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </div>
-                            </div>
-
-                            {/* Bottom Row (Chip, contactless and card number) */}
-                            <div className="flex items-center justify-between pt-1.5 border-t border-white/10">
-                                <div className="flex items-center gap-2.5">
-                                    {/* Minimalist smart card chip */}
-                                    <div className="w-7 h-5 rounded-xs bg-white/15 border border-white/25 relative overflow-hidden flex items-center justify-center opacity-85">
-                                        <div className="absolute inset-x-0 top-1/2 h-[1px] bg-white/25" />
-                                        <div className="absolute inset-y-0 left-1/3 w-[1px] bg-white/25" />
-                                        <div className="absolute inset-y-0 right-1/3 w-[1px] bg-white/25" />
-                                    </div>
-                                    
-                                    {/* Contactless indicator */}
-                                    <svg className="w-3.5 h-3.5 text-white/40 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M5 12a10 10 0 0 1 5.5-9" />
-                                        <path d="M5 12a6 6 0 0 1 3.3-5.4" />
-                                        <path d="M5 12a2 2 0 0 1 1.1-1.8" />
-                                    </svg>
-                                </div>
-
-                                <div className="text-[10px] font-mono tracking-widest text-white/60 select-all">
-                                    {lastFour}
-                                </div>
+                                </p>
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mt-0.5 capitalize">
+                                    {account.type} account
+                                </p>
                             </div>
                         </div>
                     );
@@ -225,7 +207,7 @@ export function AccountsPage() {
                 open={isModalOpen}
                 onOpenChange={handleClose}
                 title={editingId ? 'Edit Account' : 'Add New Account'}
-                size="md"
+                size="lg"
                 footer={
                     <div className="flex gap-2 justify-end">
                         <Button variant="ghost" onClick={handleClose}>
@@ -237,76 +219,160 @@ export function AccountsPage() {
                     </div>
                 }
             >
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <Input
-                        label="Account Name"
-                        placeholder="e.g., Checking Account"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        required
-                    />
+                <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Left Column: Balance, Name & Type */}
+                    <div className="space-y-4 flex flex-col justify-between">
+                        {/* Big Balance Input Display */}
+                        <div className="flex flex-col items-center justify-center p-6 bg-secondary/30 rounded-2xl border border-border/40 relative overflow-hidden flex-1 min-h-[130px]">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 select-none">
+                                Initial Balance
+                            </span>
+                            <div className="flex items-center justify-center w-full">
+                                <input
+                                    type="text"
+                                    placeholder="10,000"
+                                    value={balanceInput}
+                                    onChange={(e) => {
+                                        const formatted = formatWithCommas(e.target.value);
+                                        setBalanceInput(formatted);
+                                    }}
+                                    className="text-4xl font-extrabold tracking-tight text-center text-foreground bg-transparent border-none focus:outline-none w-full select-all placeholder:text-muted-foreground/30 focus:ring-0"
+                                />
+                            </div>
+                        </div>
 
-                    <Select
-                        label="Account Type"
-                        value={formData.type}
-                        onChange={(e) => handleTypeChange(e.target.value as any)}
-                        options={[
-                            { value: 'checking', label: 'Checking' },
-                            { value: 'savings', label: 'Savings' },
-                            { value: 'credit', label: 'Credit Card' },
-                        ]}
-                    />
+                        <div className="grid grid-cols-2 gap-4">
+                            <Input
+                                label="Account Name"
+                                placeholder="e.g., Checking"
+                                value={formData.name}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                required
+                            />
 
-                    <Input
-                        label="Initial Balance"
-                        type="number"
-                        placeholder="0.00"
-                        step="0.01"
-                        value={formData.balance}
-                        onChange={(e) => setFormData({ ...formData, balance: parseFloat(e.target.value) || 0 })}
-                    />
-
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-foreground">Color</label>
-                        <div className="flex gap-2 flex-wrap">
-                            {ACCOUNT_COLORS.map((color) => (
-                                <button
-                                    key={color}
-                                    onClick={() => setFormData({ ...formData, color })}
-                                    className={`w-8 h-8 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
-                                        formData.color === color ? 'ring-2 ring-primary scale-110' : 'hover:scale-105'
-                                    }`}
-                                    style={{ backgroundColor: color }}
-                                    type="button"
-                                    aria-label={`Select color ${color}`}
-                                >
-                                    {formData.color === color && (
-                                        <Check className="w-4 h-4 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" />
-                                    )}
-                                </button>
-                            ))}
+                            <Select
+                                label="Account Type"
+                                value={formData.type}
+                                onChange={(e) => handleTypeChange(e.target.value as any)}
+                                options={[
+                                    { value: 'checking', label: 'Checking' },
+                                    { value: 'savings', label: 'Savings' },
+                                    { value: 'credit', label: 'Credit Card' },
+                                ]}
+                            />
                         </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-foreground">Icon</label>
-                        <div className="grid grid-cols-6 gap-2 sm:grid-cols-8">
-                            {ACCOUNT_ICONS.map((icon) => (
-                                <button
-                                    key={icon}
-                                    onClick={() => setFormData({ ...formData, icon })}
-                                    className={`w-10 h-10 rounded-lg text-lg flex items-center justify-center bg-muted hover:bg-muted/80 transition-all border cursor-pointer border-transparent ${
-                                        formData.icon === icon ? 'ring-2 ring-primary bg-accent border-border scale-105' : 'hover:scale-105'
-                                    }`}
-                                    type="button"
-                                    aria-label={`Select icon ${icon}`}
-                                >
-                                    {icon}
-                                </button>
-                            ))}
+                    {/* Right Column: Customization (Color & Icon) */}
+                    <div className="space-y-4 border-t md:border-t-0 md:border-l border-border/45 pt-4 md:pt-0 md:pl-6">
+                        <div className="space-y-2">
+                            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Select Color</label>
+                            <div className="flex gap-2 flex-wrap pt-1">
+                                {ACCOUNT_COLORS.map((color) => (
+                                    <button
+                                        key={color}
+                                        onClick={() => setFormData({ ...formData, color })}
+                                        className={`w-7.5 h-7.5 rounded-full transition-all flex items-center justify-center cursor-pointer border border-black/10 dark:border-white/10 ${
+                                            formData.color === color 
+                                                ? 'ring-2 ring-primary ring-offset-2 ring-offset-background scale-110 shadow-sm' 
+                                                : 'hover:scale-105 opacity-80 hover:opacity-100'
+                                        }`}
+                                        style={{ backgroundColor: color }}
+                                        type="button"
+                                        aria-label={`Select color ${color}`}
+                                    >
+                                        {formData.color === color && (
+                                            <Check className="w-3.5 h-3.5 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Select Icon</label>
+                            <div className="grid grid-cols-6 gap-2 pt-1">
+                                {ACCOUNT_ICONS.map((icon) => (
+                                    <button
+                                        key={icon}
+                                        onClick={() => setFormData({ ...formData, icon })}
+                                        className={`w-9.5 h-9.5 rounded-xl text-lg flex items-center justify-center transition-all border cursor-pointer ${
+                                            formData.icon === icon 
+                                                ? 'bg-primary/10 border-primary text-primary font-bold scale-105 ring-2 ring-primary/20' 
+                                                : 'bg-secondary/40 border-border/50 hover:bg-secondary/80 text-muted-foreground hover:text-foreground hover:scale-105'
+                                        }`}
+                                        type="button"
+                                        aria-label={`Select icon ${icon}`}
+                                    >
+                                        {icon}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </form>
+            </Modal>
+
+            <Modal
+                open={!!deletingAccountId}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setDeletingAccountId(null);
+                        setConfirmNameInput('');
+                    }
+                }}
+                title="Delete Account"
+                size="md"
+                footer={
+                    <div className="flex gap-2 justify-end w-full">
+                        <Button variant="ghost" onClick={() => {
+                            setDeletingAccountId(null);
+                            setConfirmNameInput('');
+                        }}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            disabled={confirmNameInput !== (state.accounts.find((acc) => acc.id === deletingAccountId)?.name || '')}
+                            onClick={() => {
+                                if (deletingAccountId) {
+                                    deleteAccount(deletingAccountId);
+                                    setDeletingAccountId(null);
+                                    setConfirmNameInput('');
+                                }
+                            }}
+                        >
+                            Delete Account
+                        </Button>
+                    </div>
+                }
+            >
+                <div className="space-y-4">
+                    <div className="p-4 bg-destructive/10 text-destructive rounded-xl border border-destructive/20 flex gap-3 items-start">
+                        <span className="text-2xl mt-0.5">⚠️</span>
+                        <div>
+                            <h4 className="font-bold text-lg">Are you absolutely sure?</h4>
+                            <p className="text-sm mt-1 text-destructive/90 leading-relaxed">
+                                This action will permanently delete the account{' '}
+                                <strong className="underline">
+                                    {state.accounts.find((acc) => acc.id === deletingAccountId)?.name}
+                                </strong>{' '}
+                                and all its transactions. This action cannot be undone.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">
+                            To confirm, type <strong className="text-foreground select-all">{state.accounts.find((acc) => acc.id === deletingAccountId)?.name}</strong> below:
+                        </p>
+                        <Input
+                            placeholder="Type account name to confirm"
+                            value={confirmNameInput}
+                            onChange={(e) => setConfirmNameInput(e.target.value)}
+                        />
+                    </div>
+                </div>
             </Modal>
         </div>
     );
