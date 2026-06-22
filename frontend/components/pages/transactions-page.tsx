@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Trash2, HelpCircle } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Plus, Trash2, HelpCircle, FileText } from 'lucide-react';
 import { useFinance } from '@/lib/context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button-custom';
@@ -24,7 +24,42 @@ export function TransactionsPage({ isModalOpen: externalModalOpen, setIsModalOpe
     const isModalOpen = externalModalOpen !== undefined ? externalModalOpen : localModalOpen;
     const setIsModalOpen = setExternalModalOpen !== undefined ? setExternalModalOpen : setLocalModalOpen;
 
-    const [isQuickLogMode, setIsQuickLogMode] = useState(true);
+    const quickLogInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const activeEl = document.activeElement;
+            if (
+                activeEl &&
+                (activeEl.tagName === 'INPUT' ||
+                 activeEl.tagName === 'TEXTAREA' ||
+                 activeEl.getAttribute('contenteditable') === 'true')
+            ) {
+                return;
+            }
+
+            if (e.key === 'n' || e.key === 'N') {
+                e.preventDefault();
+                setIsModalOpen(true);
+                setTimeout(() => {
+                    quickLogInputRef.current?.focus();
+                }, 50);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [setIsModalOpen]);
+
+    useEffect(() => {
+        if (isModalOpen) {
+            const timer = setTimeout(() => {
+                quickLogInputRef.current?.focus();
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [isModalOpen]);
+
     const [showFormatGuide, setShowFormatGuide] = useState(false);
     const [quickLogInput, setQuickLogInput] = useState('');
     const [quickLogPreview, setQuickLogPreview] = useState<ParsedTransaction>({ type: 'expense', amount: 0, category: '', description: '', isValid: false, message: '' });
@@ -69,7 +104,7 @@ export function TransactionsPage({ isModalOpen: externalModalOpen, setIsModalOpe
         if (preview.isValid) {
             setFormData((prev) => {
                 const updated = { ...prev };
-                
+
                 updated.amount = preview.amount;
                 updated.type = preview.type;
                 updated.description = preview.description;
@@ -123,35 +158,6 @@ export function TransactionsPage({ isModalOpen: externalModalOpen, setIsModalOpe
         handleClose();
     };
 
-    const handleFormSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (!formData.description.trim() || formData.amount <= 0) return;
-
-        const date = new Date(formData.date);
-
-        addTransaction({
-            id: `txn-${Date.now()}`,
-            accountId: formData.accountId,
-            type: formData.type,
-            category: formData.category,
-            amount: formData.amount,
-            description: formData.description,
-            date: date.toISOString(),
-            tags: [],
-        });
-
-        setFormData({
-            accountId: state.accounts[0]?.id || '',
-            type: 'expense',
-            category: 'food',
-            amount: 0,
-            description: '',
-            date: new Date().toISOString().split('T')[0],
-        });
-        setIsModalOpen(false);
-    };
-
     const handleClose = () => {
         setIsModalOpen(false);
         setQuickLogInput('');
@@ -165,7 +171,6 @@ export function TransactionsPage({ isModalOpen: externalModalOpen, setIsModalOpe
             description: '',
             date: new Date().toISOString().split('T')[0],
         });
-        setIsQuickLogMode(true);
     };
 
     const expenseCategories = DEFAULT_CATEGORIES.filter((cat) => cat.type === 'expense');
@@ -272,163 +277,160 @@ export function TransactionsPage({ isModalOpen: externalModalOpen, setIsModalOpe
                 open={isModalOpen}
                 onOpenChange={handleClose}
                 title="Add Transaction"
-                size="md"
+                size="lg"
                 footer={
                     <div className="flex gap-2 justify-end">
                         <Button variant="ghost" onClick={handleClose}>
                             Cancel
                         </Button>
                         <Button
-                            onClick={isQuickLogMode ? handleQuickLogSubmit : handleFormSubmit}
-                            disabled={isQuickLogMode && !quickLogPreview.isValid}
+                            onClick={handleQuickLogSubmit}
+                            disabled={!quickLogPreview.isValid}
                         >
                             Add Transaction
                         </Button>
                     </div>
                 }
             >
-                <div className="space-y-4">
-                    <div className="flex gap-2 mb-4">
-                        <button
-                            onClick={() => setIsQuickLogMode(true)}
-                            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${isQuickLogMode ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground hover:bg-muted/80'
-                                }`}
-                        >
-                            Quick Log
-                        </button>
-                        <button
-                            onClick={() => setIsQuickLogMode(false)}
-                            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${!isQuickLogMode ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground hover:bg-muted/80'
-                                }`}
-                        >
-                            Detailed
-                        </button>
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Left Column: Big Amount Display, Quick Log Input, Account, Date */}
+                    <div className="space-y-4 flex flex-col justify-between">
+                        {/* Big visual Amount Display */}
+                        <div className={`flex flex-col items-center justify-center p-6 rounded-2xl border transition-all duration-200 flex-1 min-h-[130px] ${
+                            quickLogPreview.isValid
+                                ? formData.type === 'income'
+                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                                    : 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400'
+                                : 'bg-secondary/30 border-border/40 text-muted-foreground/40'
+                        }`}>
+                            <span className="text-[10px] font-bold uppercase tracking-wider opacity-60 mb-1 select-none">
+                                Parsed Amount
+                            </span>
+                            <div className="text-4xl font-extrabold tracking-tight text-center select-all">
+                                {quickLogPreview.isValid
+                                    ? `${formData.type === 'income' ? '+' : '-'}$${formData.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                    : '$0.00'}
+                            </div>
+                            {quickLogPreview.isValid && (
+                                <span className="text-xs font-semibold capitalize mt-1.5 opacity-85">
+                                    {formData.type} transaction
+                                </span>
+                            )}
+                        </div>
 
-                    {isQuickLogMode ? (
-                        <div className="space-y-4">
-                            <div>
-                                <div className="flex items-center justify-between mb-2">
-                                    <label className="block text-sm font-medium text-foreground">Quick Log</label>
-                                    <button
-                                        onClick={() => setShowFormatGuide(!showFormatGuide)}
-                                        className="text-primary hover:text-primary/80 flex items-center gap-1"
-                                        type="button"
-                                    >
-                                        <HelpCircle className="w-4 h-4" />
-                                        Format
-                                    </button>
-                                </div>
-
-                                {showFormatGuide && (
-                                    <div className="bg-muted p-3 rounded-md mb-3 text-xs whitespace-pre-line text-muted-foreground">
-                                        {getFormatGuide()}
-                                    </div>
-                                )}
-
-                                <Input
-                                    placeholder='e.g., "50 food on Jun 1" or "+1000 salary"'
-                                    value={quickLogInput}
-                                    onChange={(e) => handleQuickLogChange(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && quickLogPreview.isValid) {
-                                            handleQuickLogSubmit();
-                                        }
-                                    }}
-                                />
+                        {/* Quick Log Input Section */}
+                        <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-foreground/80">Quick Log Input</label>
+                                <button
+                                    onClick={() => setShowFormatGuide(!showFormatGuide)}
+                                    className="text-xs text-primary hover:text-primary/80 flex items-center gap-1 font-medium transition-colors cursor-pointer"
+                                    type="button"
+                                >
+                                    <HelpCircle className="w-3.5 h-3.5" />
+                                    {showFormatGuide ? 'Hide Format' : 'Show Format'}
+                                </button>
                             </div>
 
-                            {quickLogInput && (
-                                <div className={`p-3 rounded-md ${quickLogPreview.isValid ? 'bg-[var(--income)]/10' : 'bg-destructive/10'}`}>
-                                    <p className={`text-sm font-medium ${quickLogPreview.isValid ? 'income-text' : 'text-destructive'}`}>
-                                        {quickLogPreview.message}
-                                    </p>
+                            {showFormatGuide && (
+                                <div className="bg-secondary/50 border border-border/50 p-3 rounded-xl text-xs whitespace-pre-line text-muted-foreground leading-relaxed animate-in fade-in slide-in-from-top-1 duration-200">
+                                    {getFormatGuide()}
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                            <Input
+                                ref={quickLogInputRef}
+                                placeholder='e.g., "50 food for lunch on Jun 1" or "+1000 salary"'
+                                value={quickLogInput}
+                                onChange={(e) => handleQuickLogChange(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && quickLogPreview.isValid) {
+                                        handleQuickLogSubmit();
+                                    }
+                                }}
+                                className="h-12 text-base md:text-lg font-medium tracking-tight bg-secondary/20 border-border/50 placeholder:text-muted-foreground/35 placeholder:font-normal placeholder:text-sm md:placeholder:text-base"
+                            />
+                        </div>
+
+                        {/* Live parsing status badge/banner */}
+                        {quickLogInput && (
+                            <div className={`p-3 rounded-xl border text-xs transition-colors ${
+                                quickLogPreview.isValid
+                                    ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                                    : 'bg-rose-500/5 border-rose-500/20 text-rose-600 dark:text-rose-400'
+                            }`}>
+                                <p className="font-medium">
+                                    {quickLogPreview.message}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Interactive Overrides: Account, Type & Date */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-foreground/80">Account</label>
                                 <Select
-                                    label="Account"
                                     value={formData.accountId}
                                     onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
                                     options={state.accounts.map((acc) => ({ value: acc.id, label: acc.name }))}
                                 />
+                            </div>
 
-                                <Select
-                                    label="Category"
-                                    value={formData.category}
-                                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                    options={(formData.type === 'income' ? incomeCategories : expenseCategories).map((cat) => ({
-                                        value: cat.id,
-                                        label: `${cat.icon} ${cat.name}`,
-                                    }))}
-                                />
-
+                            <div className="space-y-1.5">
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-foreground/80">Date</label>
                                 <Input
-                                    label="Date"
                                     type="date"
                                     value={formData.date}
                                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                                 />
                             </div>
                         </div>
-                    ) : (
-                        <form onSubmit={handleFormSubmit} className="space-y-4">
-                            <Select
-                                label="Account"
-                                value={formData.accountId}
-                                onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
-                                options={state.accounts.map((acc) => ({ value: acc.id, label: acc.name }))}
-                            />
+                    </div>
 
-                            <Select
-                                label="Type"
-                                value={formData.type}
-                                onChange={(e) =>
-                                    setFormData({ ...formData, type: e.target.value as 'income' | 'expense', category: formData.type === 'income' ? 'salary' : 'food' })
-                                }
-                                options={[
-                                    { value: 'income', label: 'Income' },
-                                    { value: 'expense', label: 'Expense' },
-                                ]}
-                            />
+                    {/* Right Column: Description & Visual Category Selector Grid */}
+                    <div className="space-y-4 border-t md:border-t-0 md:border-l border-border/45 pt-4 md:pt-0 md:pl-6 flex flex-col justify-between">
+                        {/* Custom Parsed Description Display Tile */}
+                        <div className="flex flex-col p-4 bg-secondary/20 dark:bg-secondary/10 rounded-xl border border-border/40 min-h-[76px] justify-center relative overflow-hidden transition-all duration-200">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/80 mb-1 select-none">
+                                Parsed Description
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <FileText className={`w-4 h-4 shrink-0 transition-colors ${formData.description ? 'text-primary' : 'text-muted-foreground/45'}`} />
+                                <span className={`text-base font-semibold truncate ${formData.description ? 'text-foreground' : 'text-muted-foreground/40 italic font-normal'}`}>
+                                    {formData.description || 'Description parsed from Quick Log'}
+                                </span>
+                            </div>
+                        </div>
 
-                            <Select
-                                label="Category"
-                                value={formData.category}
-                                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                options={(formData.type === 'income' ? incomeCategories : expenseCategories).map((cat) => ({
-                                    value: cat.id,
-                                    label: `${cat.icon} ${cat.name}`,
-                                }))}
-                            />
+                        <div className="space-y-2 flex-1 flex flex-col justify-start">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-semibold uppercase tracking-wider text-foreground/80">
+                                    Select Category ({formData.type === 'income' ? 'Income' : 'Expense'})
+                                </label>
+                            </div>
 
-                            <Input
-                                label="Amount"
-                                type="number"
-                                placeholder="0.00"
-                                step="0.01"
-                                value={formData.amount}
-                                onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
-                                required
-                            />
-
-                            <Input
-                                label="Description"
-                                placeholder="What was this for?"
-                                value={formData.description}
-                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                required
-                            />
-
-                            <Input
-                                label="Date"
-                                type="date"
-                                value={formData.date}
-                                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                            />
-                        </form>
-                    )}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 max-h-[220px] overflow-y-auto pr-1">
+                                {(formData.type === 'income' ? incomeCategories : expenseCategories).map((cat) => {
+                                    const isSelected = formData.category === cat.id;
+                                    return (
+                                        <button
+                                            key={cat.id}
+                                            onClick={() => setFormData({ ...formData, category: cat.id })}
+                                            className={`py-2 px-2.5 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all border cursor-pointer select-none text-center h-[72px] ${
+                                                isSelected
+                                                    ? 'bg-primary/10 border-primary text-primary font-bold scale-102 ring-2 ring-primary/20 shadow-sm'
+                                                    : 'bg-secondary/40 border-border/50 hover:bg-secondary/80 text-muted-foreground hover:text-foreground hover:scale-102'
+                                            }`}
+                                            type="button"
+                                        >
+                                            <span className="text-xl leading-none">{cat.icon}</span>
+                                            <span className="text-[10px] tracking-tight font-medium truncate w-full">{cat.name}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </Modal>
         </div>
