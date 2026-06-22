@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Trash2, HelpCircle, FileText } from 'lucide-react';
+import { Plus, Trash2, HelpCircle, FileText, AlertTriangle } from 'lucide-react';
 import { useFinance } from '@/lib/context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button-custom';
@@ -20,6 +20,7 @@ interface TransactionsPageProps {
 export function TransactionsPage({ isModalOpen: externalModalOpen, setIsModalOpen: setExternalModalOpen }: TransactionsPageProps) {
     const { state, addTransaction, deleteTransaction } = useFinance();
     const [localModalOpen, setLocalModalOpen] = useState(false);
+    const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null);
 
     const isModalOpen = externalModalOpen !== undefined ? externalModalOpen : localModalOpen;
     const setIsModalOpen = setExternalModalOpen !== undefined ? setExternalModalOpen : setLocalModalOpen;
@@ -187,6 +188,16 @@ export function TransactionsPage({ isModalOpen: externalModalOpen, setIsModalOpe
         .filter((txn) => txn.type === 'expense')
         .reduce((sum, txn) => sum + txn.amount, 0);
 
+    const deletingTxn = deletingTransactionId 
+        ? state.transactions.find((t) => t.id === deletingTransactionId) 
+        : null;
+    const deletingTxnCategory = deletingTxn 
+        ? DEFAULT_CATEGORIES.find((cat) => cat.id === deletingTxn.category) 
+        : null;
+    const deletingTxnAccount = deletingTxn 
+        ? state.accounts.find((acc) => acc.id === deletingTxn.accountId) 
+        : null;
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -247,9 +258,7 @@ export function TransactionsPage({ isModalOpen: externalModalOpen, setIsModalOpe
                                             </span>
                                             <Button
                                                 onClick={() => {
-                                                    if (window.confirm('Delete this transaction?')) {
-                                                        deleteTransaction(txn.id);
-                                                    }
+                                                    setDeletingTransactionId(txn.id);
                                                 }}
                                                 variant="ghost"
                                                 size="sm"
@@ -431,6 +440,72 @@ export function TransactionsPage({ isModalOpen: externalModalOpen, setIsModalOpe
                             </div>
                         </div>
                     </div>
+                </div>
+            </Modal>
+
+            <Modal
+                open={!!deletingTransactionId}
+                onOpenChange={(open) => {
+                    if (!open) setDeletingTransactionId(null);
+                }}
+                title="Delete Transaction"
+                size="md"
+                footer={
+                    <div className="flex gap-2 justify-end w-full">
+                        <Button
+                            variant="ghost"
+                            onClick={() => setDeletingTransactionId(null)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={() => {
+                                if (deletingTransactionId) {
+                                    deleteTransaction(deletingTransactionId);
+                                    setDeletingTransactionId(null);
+                                }
+                            }}
+                        >
+                            Delete Transaction
+                        </Button>
+                    </div>
+                }
+            >
+                <div className="space-y-4">
+                    <div className="p-4 bg-destructive/10 text-destructive rounded-xl border border-destructive/20 flex gap-3 items-start">
+                        <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                        <div>
+                            <h4 className="font-bold text-lg">Delete this transaction?</h4>
+                            <p className="text-sm mt-1 text-destructive/90 leading-relaxed">
+                                This action is permanent and cannot be undone. It will remove the transaction from your history and adjust the account balance accordingly.
+                            </p>
+                        </div>
+                    </div>
+
+                    {deletingTxn && (
+                        <div className="bg-secondary/20 rounded-xl p-4 border border-border/40 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="text-2xl">{deletingTxnCategory?.icon || '❓'}</div>
+                                    <div>
+                                        <p className="font-semibold text-foreground">{deletingTxn.description}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {deletingTxnCategory?.name || 'Uncategorized'} • {deletingTxnAccount?.name || 'Unknown Account'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <span className={`text-lg font-bold ${deletingTxn.type === 'income' ? 'income-text' : 'expense-text'}`}>
+                                        {deletingTxn.type === 'income' ? '+' : '-'}${deletingTxn.amount.toFixed(2)}
+                                    </span>
+                                    <p className="text-[10px] text-muted-foreground">
+                                        {new Date(deletingTxn.date).toLocaleDateString()}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </Modal>
         </div>
