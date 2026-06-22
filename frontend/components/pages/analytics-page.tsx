@@ -68,6 +68,7 @@ export function AnalyticsPage() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [trendMode, setTrendMode] = useState<'daily' | 'monthly' | 'yearly'>('monthly');
+  const [balanceTrendMode, setBalanceTrendMode] = useState<'daily' | 'monthly' | 'yearly'>('monthly');
   const [isMounted, setIsMounted] = useState(false);
 
   // Generate monthly options for the last 12 calendar months
@@ -335,6 +336,98 @@ export function AnalyticsPage() {
     }));
   }, [state.transactions]);
 
+  // Chart 4: Aggregated Balance Over Time
+  const balanceOverTime = useMemo(() => {
+    const currentTotalBalance = state.accounts.reduce((sum, acc) => sum + acc.balance, 0);
+    const now = new Date();
+
+    if (balanceTrendMode === 'daily') {
+      const days = 30;
+      const dateList: Date[] = [];
+
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        dateList.push(d);
+      }
+
+      return dateList.map((d) => {
+        const boundary = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+        const txnsAfter = state.transactions.filter(
+          (t) => new Date(t.date) > boundary
+        );
+        const adjustment = txnsAfter.reduce(
+          (sum, t) => sum + (t.type === 'income' ? -t.amount : t.amount),
+          0
+        );
+        return {
+          label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          Balance: Number((currentTotalBalance + adjustment).toFixed(2)),
+        };
+      });
+    } else if (balanceTrendMode === 'monthly') {
+      const months = 12;
+      const monthList: Date[] = [];
+
+      for (let i = months - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        monthList.push(d);
+      }
+
+      return monthList.map((d) => {
+        const boundary = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+        const txnsAfter = state.transactions.filter(
+          (t) => new Date(t.date) > boundary
+        );
+        const adjustment = txnsAfter.reduce(
+          (sum, t) => sum + (t.type === 'income' ? -t.amount : t.amount),
+          0
+        );
+        return {
+          label: d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+          Balance: Number((currentTotalBalance + adjustment).toFixed(2)),
+        };
+      });
+    } else {
+      const years = 5;
+      const yearList: Date[] = [];
+
+      for (let i = years - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear() - i, 0, 1);
+        yearList.push(d);
+      }
+
+      return yearList.map((d) => {
+        const boundary = new Date(d.getFullYear(), 11, 31, 23, 59, 59, 999);
+        const txnsAfter = state.transactions.filter(
+          (t) => new Date(t.date) > boundary
+        );
+        const adjustment = txnsAfter.reduce(
+          (sum, t) => sum + (t.type === 'income' ? -t.amount : t.amount),
+          0
+        );
+        return {
+          label: String(d.getFullYear()),
+          Balance: Number((currentTotalBalance + adjustment).toFixed(2)),
+        };
+      });
+    }
+  }, [state.accounts, state.transactions, balanceTrendMode]);
+
+  const balanceChangeMetrics = useMemo(() => {
+    if (balanceOverTime.length < 2) return { amount: 0, percentage: 0, isPositive: true };
+    const first = balanceOverTime[0].Balance;
+    const last = balanceOverTime[balanceOverTime.length - 1].Balance;
+    const amount = last - first;
+    const percentage = first > 0 ? (amount / first) * 100 : 0;
+    return {
+      amount,
+      percentage,
+      isPositive: amount >= 0,
+    };
+  }, [balanceOverTime]);
+
+  const balanceTrendColor = balanceChangeMetrics.isPositive ? 'var(--income)' : 'var(--expense)';
+
   // Top transactions list (Current Period)
   const topTransactions = useMemo(() => {
     return currentTxns
@@ -422,7 +515,7 @@ export function AnalyticsPage() {
           <h1 className="text-3xl font-bold text-foreground">Analytics</h1>
           <p className="text-muted-foreground mt-1">Advanced insights into your financial health</p>
         </div>
-        <div className="flex items-center gap-1.5 bg-muted p-1 rounded-lg border border-border self-start sm:self-center select-none shrink-0">
+        <div className="flex items-center gap-1.5 bg-muted p-1 rounded-lg self-start sm:self-center select-none shrink-0">
           <button
             onClick={handlePrevMonth}
             disabled={currentIndex === monthOptions.length - 1}
@@ -515,25 +608,25 @@ export function AnalyticsPage() {
               <CardTitle>Spending by Category</CardTitle>
               <CardDescription>Visual breakdown of expenses</CardDescription>
             </div>
-            <div className="flex items-center gap-1 bg-muted p-1 rounded-lg border border-border self-start sm:self-center select-none shrink-0">
+            <div className="flex items-center gap-0.5 bg-card p-0.5 rounded-lg self-start sm:self-center select-none shrink-0">
               <button
                 onClick={handlePrevCategoryMonth}
                 disabled={categoryIndex === monthOptions.length - 1}
-                className="p-1.5 rounded-md hover:bg-background text-foreground hover:shadow-xs disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
+                className="p-1.5 rounded-md hover:bg-muted text-foreground hover:shadow-xs disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
                 aria-label="Previous Category Month"
               >
-                <ChevronLeft className="w-3.5 h-3.5" />
+                <ChevronLeft className="w-5 h-5" />
               </button>
-              <span className="text-[10px] font-bold px-2 min-w-[110px] text-center text-foreground uppercase tracking-wider">
+              <span className="text-sm font-bold px-2 min-w-[115px] text-center text-foreground uppercase tracking-wider">
                 {monthOptions[categoryIndex]?.label}
               </span>
               <button
                 onClick={handleNextCategoryMonth}
                 disabled={categoryIndex === 0}
-                className="p-1.5 rounded-md hover:bg-background text-foreground hover:shadow-xs disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
+                className="p-1.5 rounded-md hover:bg-muted text-foreground hover:shadow-xs disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
                 aria-label="Next Category Month"
               >
-                <ChevronRight className="w-3.5 h-3.5" />
+                <ChevronRight className="w-5 h-5" />
               </button>
             </div>
           </CardHeader>
@@ -748,6 +841,71 @@ export function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Full-width Aggregated Balance History Area Chart */}
+      <Card>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <CardTitle>Balance History</CardTitle>
+            <CardDescription className="flex flex-wrap items-center gap-2 mt-1">
+              <span>Track the progress of your aggregated balance</span>
+              {balanceOverTime.length >= 2 && (
+                <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full select-none ${
+                  balanceChangeMetrics.isPositive 
+                    ? 'income-bg income-text' 
+                    : 'expense-bg expense-text'
+                }`}>
+                  {balanceChangeMetrics.isPositive ? '↑' : '↓'}
+                  {formatCurrency(Math.abs(balanceChangeMetrics.amount))} ({balanceChangeMetrics.isPositive ? '+' : ''}{balanceChangeMetrics.percentage.toFixed(1)}%)
+                </span>
+              )}
+            </CardDescription>
+          </div>
+          {/* Daily/Monthly/Yearly switcher */}
+          <div className="flex bg-muted p-1 rounded-lg self-start sm:self-center">
+            {(['daily', 'monthly', 'yearly'] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setBalanceTrendMode(mode)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all capitalize cursor-pointer ${
+                  balanceTrendMode === mode ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={balanceOverTime} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="balanceColor" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={balanceTrendColor} stopOpacity={0.25} />
+                    <stop offset="95%" stopColor={balanceTrendColor} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} domain={['auto', 'auto']} />
+                <Tooltip content={<CustomTooltip />} />
+                <Area
+                  type="monotone"
+                  dataKey="Balance"
+                  stroke={balanceTrendColor}
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#balanceColor)"
+                  name="Balance"
+                  dot={{ r: 4, fill: 'var(--background)', stroke: balanceTrendColor, strokeWidth: 2 }}
+                  activeDot={{ r: 6, fill: balanceTrendColor, stroke: 'var(--background)', strokeWidth: 2 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
