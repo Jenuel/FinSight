@@ -1,8 +1,8 @@
 from django.contrib import admin
-from .models import CashAccount
+from .models import Account
 
-@admin.register(CashAccount)
-class CashAccountAdmin(admin.ModelAdmin):
+@admin.register(Account)
+class AccountAdmin(admin.ModelAdmin):
     list_display = ('name', 'user', 'balance', 'currency', 'account_type')
     list_filter = ('account_type', 'user', 'currency')
     search_fields = ('name', 'user__username', 'user__email')

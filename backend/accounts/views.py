@@ -1,18 +1,18 @@
 from rest_framework import viewsets
-from .models import CashAccount
-from .serializers import CashAccountSerializer
+from .models import Account
+from .serializers import AccountSerializer
 
-class CashAccountViewSet(viewsets.ModelViewSet):
+class AccountViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for viewing and editing Cash Accounts.
+    ViewSet for viewing and editing Accounts.
     """
-    serializer_class = CashAccountSerializer
+    serializer_class = AccountSerializer
 
     def get_queryset(self):
         user = self.request.user
         if user.is_authenticated:
-            return CashAccount.objects.filter(user=user)
-        return CashAccount.objects.filter(user__isnull=True)
+            return Account.objects.filter(user=user)
+        return Account.objects.filter(user__isnull=True)
 
     def perform_create(self, serializer):
         if self.request.user.is_authenticated:

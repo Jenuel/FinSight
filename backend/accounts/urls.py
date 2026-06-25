@@ -1,9 +1,9 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import CashAccountViewSet
+from .views import AccountViewSet
 
 router = DefaultRouter()
-router.register(r'accounts', CashAccountViewSet, basename='cash-account')
+router.register(r'accounts', AccountViewSet, basename='account')
 
 urlpatterns = [
     path('', include(router.urls)),
