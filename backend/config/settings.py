@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     # Local apps
     'accounts.apps.AccountsConfig',
     'transactions.apps.TransactionsConfig',
+    'reconciliation.apps.ReconciliationConfig',
 ]
 
 MIDDLEWARE = [
