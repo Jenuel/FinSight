@@ -36,4 +36,24 @@ class TransactionViewSet(viewsets.ModelViewSet):
         if end_date:
             queryset = queryset.filter(transaction_date__lte=end_date)
 
+        entry_type = self.request.query_params.get('entry_type')
+        if entry_type:
+            queryset = queryset.filter(entry_type=entry_type)
+
+        reconciliation_status = self.request.query_params.get('reconciliation_status')
+        if reconciliation_status:
+            queryset = queryset.filter(reconciliation_status=reconciliation_status)
+
+        reconciliation_session = self.request.query_params.get('reconciliation_session')
+        if reconciliation_session:
+            queryset = queryset.filter(reconciliation_session_id=reconciliation_session)
+
+        is_adjustment = self.request.query_params.get('is_adjustment')
+        if is_adjustment is not None:
+            queryset = queryset.filter(is_adjustment=is_adjustment.lower() in ('true', '1', 't'))
+
+        is_backdated = self.request.query_params.get('is_backdated')
+        if is_backdated is not None:
+            queryset = queryset.filter(is_backdated=is_backdated.lower() in ('true', '1', 't'))
+
         return queryset

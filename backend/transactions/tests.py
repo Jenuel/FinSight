@@ -2,7 +2,7 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 from rest_framework import status
 from rest_framework.test import APITestCase
-from accounts.models import CashAccount
+from accounts.models import Account
 from .models import Transaction
 
 class TransactionTests(APITestCase):
@@ -12,27 +12,27 @@ class TransactionTests(APITestCase):
         self.user2 = User.objects.create_user(username='user2', password='password123')
 
         # Create some test accounts
-        self.public_account = CashAccount.objects.create(
+        self.public_account = Account.objects.create(
             name='Public Account',
             balance=100.00,
             currency='USD',
             account_type='cash'
         )
-        self.user1_account = CashAccount.objects.create(
+        self.user1_account = Account.objects.create(
             name='User1 Checking',
             balance=1000.00,
             currency='USD',
             account_type='checking',
             user=self.user1
         )
-        self.user1_savings = CashAccount.objects.create(
+        self.user1_savings = Account.objects.create(
             name='User1 Savings',
             balance=500.00,
             currency='USD',
             account_type='savings',
             user=self.user1
         )
-        self.user2_account = CashAccount.objects.create(
+        self.user2_account = Account.objects.create(
             name='User2 Savings',
             balance=2000.00,
             currency='USD',
@@ -61,6 +61,7 @@ class TransactionTests(APITestCase):
             category='Salary'
         )
 
+        # Let's hit the endpoint
         response = self.client.get(self.list_create_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
