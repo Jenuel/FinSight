@@ -8,17 +8,19 @@ class UserMinimalSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'email']
 
 class AccountSerializer(serializers.ModelSerializer):
-    user = UserMinimalSerializer(read_only=True)
+    userid = serializers.CharField(source='user_id', read_only=True)
     
     class Meta:
         model = Account
         fields = [
             'id', 
-            'user', 
+            'userid', 
             'name', 
             'balance', 
             'currency', 
             'account_type', 
+            'color',
+            'icon',
             'created_at', 
             'updated_at'
         ]

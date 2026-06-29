@@ -29,6 +29,8 @@ class Account(models.Model):
         choices=ACCOUNT_TYPE_CHOICES,
         default='cash'
     )
+    color = models.CharField(max_length=50, blank=True, default='green')
+    icon = models.CharField(max_length=50, blank=True, default='account_balance')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -9,24 +9,35 @@ export interface Category {
 
 export interface Account {
     id: string;
+    userid: string;
     name: string;
-    type: 'checking' | 'savings' | 'credit';
-    balance: number;
+    account_type: 'checking' | 'savings' | 'credit' | 'cash' | 'ewallet';
+    balance: string;
     currency: string;
-    createdAt: string;
     color: string;
     icon: string;
+    created_at: string;
+    updated_at: string;
 }
+
+export type EntryType = 'exact' | 'estimated' | 'manual';
+export type ReconciliationStatus = 'unreconciled' | 'reconciled' | 'excluded';
 
 export interface Transaction {
     id: string;
-    accountId: string;
-    type: TransactionType;
+    account: string;
+    transaction_type: 'income' | 'expense';
+    amount: string;
     category: string;
-    amount: number;
     description: string;
-    date: string;
-    tags: string[];
+    transaction_date: string;
+    entry_type: EntryType;
+    reconciliation_status: ReconciliationStatus;
+    reconciliation_session: string | null;
+    is_adjustment: boolean;
+    is_backdated: boolean;
+    created_at: string;
+    updated_at: string;
 }
 
 export interface FinanceState {
