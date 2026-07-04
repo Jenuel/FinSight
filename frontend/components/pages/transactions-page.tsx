@@ -139,14 +139,13 @@ export function TransactionsPage({ isModalOpen: externalModalOpen, setIsModalOpe
         }
     };
 
-    const handleQuickLogSubmit = () => {
+    const handleQuickLogSubmit = async () => {
         if (!quickLogPreview.isValid) return;
 
         const selectedAccount = state.accounts.find((acc) => acc.id === formData.accountId);
         if (!selectedAccount) return;
 
-        addTransaction({
-            id: `txn-${Date.now()}`,
+        await addTransaction({
             accountId: formData.accountId,
             type: formData.type,
             category: formData.category,
@@ -460,9 +459,9 @@ export function TransactionsPage({ isModalOpen: externalModalOpen, setIsModalOpe
                         </Button>
                         <Button
                             variant="destructive"
-                            onClick={() => {
+                            onClick={async () => {
                                 if (deletingTransactionId) {
-                                    deleteTransaction(deletingTransactionId);
+                                    await deleteTransaction(deletingTransactionId);
                                     setDeletingTransactionId(null);
                                 }
                             }}

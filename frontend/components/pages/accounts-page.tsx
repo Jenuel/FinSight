@@ -37,13 +37,13 @@ export function AccountsPage() {
     const [reconciliationData, setReconciliationData] = useState<{ diff: number, originalBalance: number, newBalance: number, submitData: any } | null>(null);
     const [formData, setFormData] = useState({
         name: '',
-        type: 'checking' as 'checking' | 'savings' | 'credit',
+        type: 'checking' as 'checking' | 'savings' | 'credit' | 'cash' | 'ewallet',
         color: ACCOUNT_COLORS[0],
         icon: '🏦',
         balance: 0,
     });
 
-    const handleTypeChange = (type: 'checking' | 'savings' | 'credit') => {
+    const handleTypeChange = (type: 'checking' | 'savings' | 'credit' | 'cash' | 'ewallet') => {
         let defaultIcon = '🏦';
         if (type === 'savings') defaultIcon = '🐷';
         if (type === 'credit') defaultIcon = '💳';
@@ -56,7 +56,7 @@ export function AccountsPage() {
         }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         if (!formData.name.trim()) return;
@@ -79,14 +79,12 @@ export function AccountsPage() {
                 });
                 return;
             }
-            updateAccount(editingId, submitData);
+            await updateAccount(editingId, submitData);
             setEditingId(null);
         } else {
-            addAccount({
-                id: `acc-${Date.now()}`,
+            await addAccount({
                 ...submitData,
                 currency: 'USD',
-                createdAt: new Date().toISOString(),
             });
         }
 
@@ -95,10 +93,9 @@ export function AccountsPage() {
         setIsModalOpen(false);
     };
 
-    const handleConfirmReconciliation = () => {
+    const handleConfirmReconciliation = async () => {
         if (editingId && reconciliationData) {
-            addTransaction({
-                id: `txn-${Date.now()}`,
+            await addTransaction({
                 accountId: editingId,
                 type: reconciliationData.diff > 0 ? 'income' : 'expense',
                 category: reconciliationData.diff > 0 ? 'other-income' : 'other-expense',
@@ -107,7 +104,7 @@ export function AccountsPage() {
                 date: new Date().toISOString().split('T')[0],
                 tags: ['reconciliation']
             });
-            updateAccount(editingId, reconciliationData.submitData);
+            await updateAccount(editingId, reconciliationData.submitData);
             setEditingId(null);
             setReconciliationData(null);
             setFormData({ name: '', type: 'checking', color: ACCOUNT_COLORS[0], icon: '🏦', balance: 0 });
