@@ -2,29 +2,29 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 from rest_framework import status
 from rest_framework.test import APITestCase
-from .models import CashAccount
+from .models import Account
 
-class CashAccountTests(APITestCase):
+class AccountTests(APITestCase):
     def setUp(self):
         # Create test users
         self.user1 = User.objects.create_user(username='user1', password='password123')
         self.user2 = User.objects.create_user(username='user2', password='password123')
         
         # Create some test accounts
-        self.public_account = CashAccount.objects.create(
+        self.public_account = Account.objects.create(
             name='Public Wallet',
             balance=100.00,
             currency='USD',
             account_type='cash'
         )
-        self.user1_account = CashAccount.objects.create(
+        self.user1_account = Account.objects.create(
             name='User1 Checking',
             balance=2500.50,
             currency='USD',
             account_type='checking',
             user=self.user1
         )
-        self.user2_account = CashAccount.objects.create(
+        self.user2_account = Account.objects.create(
             name='User2 Savings',
             balance=5000.00,
             currency='EUR',
@@ -32,7 +32,7 @@ class CashAccountTests(APITestCase):
             user=self.user2
         )
         
-        self.list_create_url = reverse('cash-account-list')
+        self.list_create_url = reverse('account-list')
 
     def test_list_accounts_unauthenticated(self):
         """
@@ -68,7 +68,7 @@ class CashAccountTests(APITestCase):
         self.assertIsNone(response.data['user'])
         
         # Verify in DB
-        account = CashAccount.objects.get(id=response.data['id'])
+        account = Account.objects.get(id=response.data['id'])
         self.assertIsNone(account.user)
 
     def test_create_account_authenticated(self):
@@ -87,14 +87,14 @@ class CashAccountTests(APITestCase):
         self.assertEqual(response.data['user']['username'], 'user1')
         
         # Verify in DB
-        account = CashAccount.objects.get(id=response.data['id'])
+        account = Account.objects.get(id=response.data['id'])
         self.assertEqual(account.user, self.user1)
 
     def test_retrieve_account(self):
         """
         Can retrieve account details.
         """
-        url = reverse('cash-account-detail', kwargs={'pk': self.public_account.id})
+        url = reverse('account-detail', kwargs={'pk': self.public_account.id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['name'], 'Public Wallet')
@@ -103,7 +103,7 @@ class CashAccountTests(APITestCase):
         """
         Can update account details.
         """
-        url = reverse('cash-account-detail', kwargs={'pk': self.public_account.id})
+        url = reverse('account-detail', kwargs={'pk': self.public_account.id})
         data = {
             'name': 'Updated Public Wallet',
             'balance': '150.00',
@@ -119,8 +119,7 @@ class CashAccountTests(APITestCase):
         """
         Can delete an account.
         """
-        url = reverse('cash-account-detail', kwargs={'pk': self.public_account.id})
+        url = reverse('account-detail', kwargs={'pk': self.public_account.id})
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(CashAccount.objects.filter(id=self.public_account.id).exists())
-
+        self.assertFalse(Account.objects.filter(id=self.public_account.id).exists())

@@ -1,14 +1,14 @@
 from rest_framework import serializers
 from .models import Transaction
-from accounts.models import CashAccount
+from accounts.models import Account
 
-class CashAccountMinimalSerializer(serializers.ModelSerializer):
+class AccountMinimalSerializer(serializers.ModelSerializer):
     class Meta:
-        model = CashAccount
+        model = Account
         fields = ['id', 'name', 'currency']
 
 class TransactionSerializer(serializers.ModelSerializer):
-    account_details = CashAccountMinimalSerializer(source='account', read_only=True)
+    account_details = AccountMinimalSerializer(source='account', read_only=True)
 
     class Meta:
         model = Transaction
@@ -21,6 +21,11 @@ class TransactionSerializer(serializers.ModelSerializer):
             'category',
             'description',
             'transaction_date',
+            'entry_type',
+            'reconciliation_status',
+            'reconciliation_session',
+            'is_adjustment',
+            'is_backdated',
             'created_at',
             'updated_at'
         ]

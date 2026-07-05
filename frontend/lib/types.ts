@@ -10,10 +10,10 @@ export interface Category {
 export interface Account {
     id: string;
     name: string;
-    type: 'checking' | 'savings' | 'credit';
+    type: 'checking' | 'savings' | 'credit' | 'cash' | 'ewallet';
     balance: number;
     currency: string;
-    createdAt: string;
+    createdAt?: string;
     color: string;
     icon: string;
 }
@@ -26,7 +26,7 @@ export interface Transaction {
     amount: number;
     description: string;
     date: string;
-    tags: string[];
+    tags?: string[];
 }
 
 export interface FinanceState {

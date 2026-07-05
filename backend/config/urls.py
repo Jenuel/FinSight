@@ -33,5 +33,6 @@ urlpatterns = [
     path('api/health/', health_check, name='health-check'),
     path('api/', include('accounts.urls')),
     path('api/', include('transactions.urls')),
+    path('api/', include('reconciliation.urls')),
 ]
 

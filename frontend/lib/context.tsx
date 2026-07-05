@@ -2,16 +2,18 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Account, Transaction, Category, FinanceState } from './types';
-import { getStorageData, saveStorageData, initializeData } from './storage';
+import { getDataService } from './services/data-service';
 
 interface FinanceContextType {
     state: FinanceState;
-    addAccount: (account: Account) => void;
-    updateAccount: (id: string, updates: Partial<Account>) => void;
-    deleteAccount: (id: string) => void;
-    addTransaction: (transaction: Transaction) => void;
-    updateTransaction: (id: string, updates: Partial<Transaction>) => void;
-    deleteTransaction: (id: string) => void;
+    isLoaded: boolean;
+    error: string | null;
+    addAccount: (account: Omit<Account, 'id' | 'createdAt'>) => Promise<void>;
+    updateAccount: (id: string, updates: Partial<Account>) => Promise<void>;
+    deleteAccount: (id: string) => Promise<void>;
+    addTransaction: (transaction: Omit<Transaction, 'id'>) => Promise<void>;
+    updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>;
+    deleteTransaction: (id: string) => Promise<void>;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
@@ -19,83 +21,130 @@ const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
     const [state, setState] = useState<FinanceState>({ accounts: [], transactions: [], categories: [] });
     const [isLoaded, setIsLoaded] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     // Initialize data on mount
     useEffect(() => {
-        const data = initializeData();
-        setState(data);
-        setIsLoaded(true);
+        const loadData = async () => {
+            try {
+                const service = getDataService();
+                const data = await service.fetchState();
+                setState(data);
+                setIsLoaded(true);
+            } catch (err: any) {
+                console.error("Failed to load data:", err);
+                setError(err.message || "Failed to load data");
+            }
+        };
+        
+        loadData();
     }, []);
 
-    // Save to localStorage whenever state changes
-    useEffect(() => {
-        if (isLoaded) {
-            saveStorageData(state);
+    const addAccount = async (accountData: Omit<Account, 'id' | 'createdAt'>) => {
+        try {
+            const service = getDataService();
+            const newAccount = await service.createAccount(accountData);
+            setState((prev) => ({
+                ...prev,
+                accounts: [...prev.accounts, newAccount],
+            }));
+        } catch (err: any) {
+            console.error("Failed to create account", err);
+            throw err;
         }
-    }, [state, isLoaded]);
-
-    const addAccount = (account: Account) => {
-        setState((prev) => ({
-            ...prev,
-            accounts: [...prev.accounts, account],
-        }));
     };
 
-    const updateAccount = (id: string, updates: Partial<Account>) => {
-        setState((prev) => ({
-            ...prev,
-            accounts: prev.accounts.map((acc) => (acc.id === id ? { ...acc, ...updates } : acc)),
-        }));
+    const updateAccount = async (id: string, updates: Partial<Account>) => {
+        try {
+            const service = getDataService();
+            const updatedAccount = await service.updateAccount(id, updates);
+            setState((prev) => ({
+                ...prev,
+                accounts: prev.accounts.map((acc) => (acc.id === id ? updatedAccount : acc)),
+            }));
+        } catch (err: any) {
+            console.error("Failed to update account", err);
+            throw err;
+        }
     };
 
-    const deleteAccount = (id: string) => {
-        setState((prev) => ({
-            ...prev,
-            accounts: prev.accounts.filter((acc) => acc.id !== id),
-            transactions: prev.transactions.filter((txn) => txn.accountId !== id),
-        }));
+    const deleteAccount = async (id: string) => {
+        try {
+            const service = getDataService();
+            await service.deleteAccount(id);
+            setState((prev) => ({
+                ...prev,
+                accounts: prev.accounts.filter((acc) => acc.id !== id),
+                transactions: prev.transactions.filter((txn) => txn.accountId !== id),
+            }));
+        } catch (err: any) {
+            console.error("Failed to delete account", err);
+            throw err;
+        }
     };
 
-    const addTransaction = (transaction: Transaction) => {
-        setState((prev) => ({
-            ...prev,
-            transactions: [...prev.transactions, transaction],
-        }));
+    const addTransaction = async (transactionData: Omit<Transaction, 'id'>) => {
+        try {
+            const service = getDataService();
+            const newTransaction = await service.createTransaction(transactionData);
+            
+            setState((prev) => {
+                const newTransactions = [...prev.transactions, newTransaction];
+                const newAccounts = prev.accounts.map(acc => {
+                    if (acc.id === newTransaction.accountId) {
+                        const amount = newTransaction.type === 'income' ? newTransaction.amount : -newTransaction.amount;
+                        return { ...acc, balance: acc.balance + amount };
+                    }
+                    return acc;
+                });
 
-        // Update account balance
-        updateAccount(transaction.accountId, {
-            balance:
-                state.accounts.find((acc) => acc.id === transaction.accountId)?.balance! +
-                (transaction.type === 'income' ? transaction.amount : -transaction.amount),
-        });
-    };
-
-    const updateTransaction = (id: string, updates: Partial<Transaction>) => {
-        setState((prev) => ({
-            ...prev,
-            transactions: prev.transactions.map((txn) => (txn.id === id ? { ...txn, ...updates } : txn)),
-        }));
-    };
-
-    const deleteTransaction = (id: string) => {
-        const transaction = state.transactions.find((txn) => txn.id === id);
-        if (transaction) {
-            // Reverse the transaction from account balance
-            updateAccount(transaction.accountId, {
-                balance:
-                    state.accounts.find((acc) => acc.id === transaction.accountId)?.balance! -
-                    (transaction.type === 'income' ? transaction.amount : -transaction.amount),
+                return {
+                    ...prev,
+                    transactions: newTransactions,
+                    accounts: newAccounts,
+                };
             });
+        } catch (err: any) {
+            console.error("Failed to create transaction", err);
+            throw err;
         }
+    };
 
-        setState((prev) => ({
-            ...prev,
-            transactions: prev.transactions.filter((txn) => txn.id !== id),
-        }));
+    const updateTransaction = async (id: string, updates: Partial<Transaction>) => {
+        try {
+            const service = getDataService();
+            const updatedTransaction = await service.updateTransaction(id, updates);
+            
+            // To properly update balances when a transaction is modified, 
+            // the safest bet without recalculating everything is to refetch state,
+            // or we could do a local diff. Let's just refetch state to be completely synchronized,
+            // especially since backend might handle balance recalculation.
+            const newState = await service.fetchState();
+            setState(newState);
+            
+        } catch (err: any) {
+            console.error("Failed to update transaction", err);
+            throw err;
+        }
+    };
+
+    const deleteTransaction = async (id: string) => {
+        try {
+            const service = getDataService();
+            await service.deleteTransaction(id);
+            
+            // Refetch state for perfect synchronization, especially for account balances.
+            const newState = await service.fetchState();
+            setState(newState);
+
+        } catch (err: any) {
+            console.error("Failed to delete transaction", err);
+            throw err;
+        }
     };
 
     return (
-        <FinanceContext.Provider value={{ state, addAccount, updateAccount, deleteAccount, addTransaction, updateTransaction, deleteTransaction }}>
+        <FinanceContext.Provider value={{ state, isLoaded, error, addAccount, updateAccount, deleteAccount, addTransaction, updateTransaction, deleteTransaction }}>
             {children}
         </FinanceContext.Provider>
     );

@@ -28,21 +28,22 @@ const formatWithCommas = (value: string) => {
 };
 
 export function AccountsPage() {
-    const { state, addAccount, updateAccount, deleteAccount } = useFinance();
+    const { state, addAccount, updateAccount, deleteAccount, addTransaction } = useFinance();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [balanceInput, setBalanceInput] = useState('');
     const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
     const [confirmNameInput, setConfirmNameInput] = useState('');
+    const [reconciliationData, setReconciliationData] = useState<{ diff: number, originalBalance: number, newBalance: number, submitData: any } | null>(null);
     const [formData, setFormData] = useState({
         name: '',
-        type: 'checking' as 'checking' | 'savings' | 'credit',
+        type: 'checking' as 'checking' | 'savings' | 'credit' | 'cash' | 'ewallet',
         color: ACCOUNT_COLORS[0],
         icon: '🏦',
         balance: 0,
     });
 
-    const handleTypeChange = (type: 'checking' | 'savings' | 'credit') => {
+    const handleTypeChange = (type: 'checking' | 'savings' | 'credit' | 'cash' | 'ewallet') => {
         let defaultIcon = '🏦';
         if (type === 'savings') defaultIcon = '🐷';
         if (type === 'credit') defaultIcon = '💳';
@@ -55,7 +56,7 @@ export function AccountsPage() {
         }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         if (!formData.name.trim()) return;
@@ -67,20 +68,49 @@ export function AccountsPage() {
         };
 
         if (editingId) {
-            updateAccount(editingId, submitData);
+            const originalAccount = state.accounts.find((a) => a.id === editingId);
+            if (originalAccount && originalAccount.balance !== numericBalance) {
+                const diff = numericBalance - originalAccount.balance;
+                setReconciliationData({
+                    diff,
+                    originalBalance: originalAccount.balance,
+                    newBalance: numericBalance,
+                    submitData,
+                });
+                return;
+            }
+            await updateAccount(editingId, submitData);
             setEditingId(null);
         } else {
-            addAccount({
-                id: `acc-${Date.now()}`,
+            await addAccount({
                 ...submitData,
                 currency: 'USD',
-                createdAt: new Date().toISOString(),
             });
         }
 
         setFormData({ name: '', type: 'checking', color: ACCOUNT_COLORS[0], icon: '🏦', balance: 0 });
         setBalanceInput('');
         setIsModalOpen(false);
+    };
+
+    const handleConfirmReconciliation = async () => {
+        if (editingId && reconciliationData) {
+            await addTransaction({
+                accountId: editingId,
+                type: reconciliationData.diff > 0 ? 'income' : 'expense',
+                category: reconciliationData.diff > 0 ? 'other-income' : 'other-expense',
+                amount: Math.abs(reconciliationData.diff),
+                description: 'Reconciled balance',
+                date: new Date().toISOString().split('T')[0],
+                tags: ['reconciliation']
+            });
+            await updateAccount(editingId, reconciliationData.submitData);
+            setEditingId(null);
+            setReconciliationData(null);
+            setFormData({ name: '', type: 'checking', color: ACCOUNT_COLORS[0], icon: '🏦', balance: 0 });
+            setBalanceInput('');
+            setIsModalOpen(false);
+        }
     };
 
     const handleEdit = (id: string) => {
@@ -373,6 +403,48 @@ export function AccountsPage() {
                         />
                     </div>
                 </div>
+            </Modal>
+
+            <Modal
+                open={!!reconciliationData}
+                onOpenChange={(open) => !open && setReconciliationData(null)}
+                title="Confirm Reconciliation"
+                size="md"
+                footer={
+                    <div className="flex gap-2 justify-end w-full">
+                        <Button variant="ghost" onClick={() => setReconciliationData(null)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleConfirmReconciliation}>
+                            Confirm
+                        </Button>
+                    </div>
+                }
+            >
+                {reconciliationData && (
+                    <div className="space-y-4">
+                        <div className="p-4 bg-secondary/30 rounded-xl border border-border/40 space-y-3">
+                            <h4 className="font-semibold text-foreground">Balance Update Summary</h4>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Original Balance:</span>
+                                <span className="font-medium text-foreground">${reconciliationData.originalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">New Balance:</span>
+                                <span className="font-medium text-foreground">${reconciliationData.newBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex justify-between text-sm border-t border-border/40 pt-2 mt-2">
+                                <span className="text-muted-foreground">Difference:</span>
+                                <span className={`font-bold ${reconciliationData.diff > 0 ? 'text-emerald-500' : 'text-destructive'}`}>
+                                    {reconciliationData.diff > 0 ? '+' : '-'}${Math.abs(reconciliationData.diff).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                            </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                            To ensure your total balance is accurate, a <strong className="text-foreground">reconciliation transaction</strong> will be automatically created for this difference.
+                        </p>
+                    </div>
+                )}
             </Modal>
         </div>
     );
