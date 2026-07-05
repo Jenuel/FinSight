@@ -1,0 +1,30 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - CORS_ALLOW_ALL_ORIGINS=True
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+    # You can uncomment and configure these if using Supabase or another DB
+    #  - DB_HOST=
+    #  - DB_NAME=postgres
+    #  - DB_USER=postgres
+    #  - DB_PASSWORD=
+    #  - DB_PORT=5432
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    restart: unless-stopped

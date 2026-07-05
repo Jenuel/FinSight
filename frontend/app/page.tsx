@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { FinanceProvider } from '@/lib/context';
+import { FinanceProvider, useFinance } from '@/lib/context';
 import { DashboardPage } from '@/components/pages/dashboard-page';
 import { AccountsPage } from '@/components/pages/accounts-page';
 import { TransactionsPage } from '@/components/pages/transactions-page';
@@ -111,8 +111,8 @@ export default function Home() {
         <div className="flex flex-1 min-h-0 overflow-hidden">
           <Sidebar activeTab={activeTab} onTabChange={handleTabChange} />
           <main className="flex-1 overflow-y-auto">
-            <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-              {renderPage()}
+            <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 h-full">
+              <MainContent renderPage={renderPage} />
             </div>
           </main>
         </div>
@@ -269,3 +269,25 @@ function Sidebar({ activeTab, onTabChange }: { activeTab: string; onTabChange: (
   );
 }
 
+function MainContent({ renderPage }: { renderPage: () => React.ReactNode }) {
+  const { isLoaded } = useFinance();
+
+  if (!isLoaded) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full min-h-[60vh] space-y-6 text-center animate-fade-in">
+        <div className="relative w-20 h-20">
+          <div className="absolute inset-0 rounded-full border-4 border-muted/30"></div>
+          <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+        </div>
+        <div className="space-y-2">
+          <h3 className="text-xl font-semibold text-foreground tracking-tight">Warming up backend...</h3>
+          <p className="text-sm text-muted-foreground max-w-[280px] mx-auto leading-relaxed">
+            Please wait while the server wakes up. This might take up to 50 seconds on the free tier.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{renderPage()}</>;
+}
