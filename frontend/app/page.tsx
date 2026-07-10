@@ -7,23 +7,30 @@ import { AccountsPage } from '@/components/pages/accounts-page';
 import { TransactionsPage } from '@/components/pages/transactions-page';
 import { AnalyticsPage } from '@/components/pages/analytics-page';
 import { AuthPage } from '@/components/pages/auth-page';
+import { useUser, useClerk } from '@clerk/nextjs';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
-  const [userEmail, setUserEmail] = useState<string>('');
+  const [isLocalLoggedIn, setIsLocalLoggedIn] = useState<boolean | null>(null);
+  const [localUserEmail, setLocalUserEmail] = useState<string>('');
+
+  const { isLoaded: isClerkLoaded, isSignedIn: isClerkSignedIn, user: clerkUser } = useUser();
+  const { signOut: clerkSignOut } = useClerk();
 
   useEffect(() => {
     const loggedIn = localStorage.getItem('finsight-logged-in');
     const email = localStorage.getItem('finsight-user-email');
     if (loggedIn === 'true' && email) {
-      setIsLoggedIn(true);
-      setUserEmail(email);
+      setIsLocalLoggedIn(true);
+      setLocalUserEmail(email);
     } else {
-      setIsLoggedIn(false);
+      setIsLocalLoggedIn(false);
     }
   }, []);
+
+  const isLoggedIn = isClerkSignedIn || isLocalLoggedIn;
+  const userEmail = clerkUser?.primaryEmailAddress?.emailAddress || localUserEmail;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -55,18 +62,28 @@ export default function Home() {
   }, []);
 
   const handleLoginSuccess = (email: string) => {
-    localStorage.setItem('finsight-logged-in', 'true');
-    localStorage.setItem('finsight-user-email', email);
-    setIsLoggedIn(true);
-    setUserEmail(email);
+    // If we're logging in via Mock Auth, the auth page will call this.
+    // We update local state just to be safe. If Clerk was used, it will automatically update isClerkSignedIn.
+    if (!isClerkSignedIn) {
+      localStorage.setItem('finsight-logged-in', 'true');
+      localStorage.setItem('finsight-user-email', email);
+      setIsLocalLoggedIn(true);
+      setLocalUserEmail(email);
+    }
     setActiveTab('dashboard');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Clear mock state
     localStorage.removeItem('finsight-logged-in');
     localStorage.removeItem('finsight-user-email');
-    setIsLoggedIn(false);
-    setUserEmail('');
+    setIsLocalLoggedIn(false);
+    setLocalUserEmail('');
+    
+    // Clear clerk state
+    if (isClerkSignedIn) {
+      await clerkSignOut();
+    }
   };
 
   const renderPage = () => {
@@ -89,7 +106,7 @@ export default function Home() {
     }
   };
 
-  if (isLoggedIn === null) {
+  if (isLocalLoggedIn === null || !isClerkLoaded) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-background">
         <svg className="animate-spin h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24">
