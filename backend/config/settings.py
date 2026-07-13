@@ -168,14 +168,27 @@ CORS_ALLOWED_ORIGINS = [
     origin.strip() for origin in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if origin.strip()
 ]
 
+# Clerk JWT configuration
+CLERK_JWKS_URL = os.getenv('CLERK_JWKS_URL', '')
+
+# Expected 'iss' claim (e.g. https://your-app.clerk.accounts.dev). When set,
+# the issuer is verified on every token; leave blank to skip issuer checks.
+CLERK_ISSUER = os.getenv('CLERK_ISSUER', '')
+
+# Allow-list for the 'azp' (authorized party) claim - typically your frontend
+# origin(s), comma-separated (e.g. http://localhost:3000,https://app.example.com).
+# When set, a token whose azp is not in this list is rejected.
+CLERK_AUTHORIZED_PARTIES = [
+    p.strip() for p in os.getenv('CLERK_AUTHORIZED_PARTIES', '').split(',') if p.strip()
+]
+
 # Django REST Framework configuration
 REST_FRAMEWORK = {
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
-    ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
+        'accounts.authentication.ClerkJWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
     ],
 }
 
