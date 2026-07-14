@@ -19,9 +19,9 @@ class Transaction(models.Model):
     ]
 
     RECONCILIATION_STATUS_CHOICES = [
-        ('unreconciled', 'Unreconciled'),
-        ('reconciled', 'Reconciled'),
-        ('excluded', 'Excluded'),
+        ('pending',  'Pending'),
+        ('cleared',  'Cleared'),
+        ('adjusted', 'Adjusted'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -45,7 +45,7 @@ class Transaction(models.Model):
         max_length=10, choices=ENTRY_TYPE_CHOICES, default='exact'
     )
     reconciliation_status = models.CharField(
-        max_length=20, choices=RECONCILIATION_STATUS_CHOICES, default='unreconciled'
+        max_length=10, choices=RECONCILIATION_STATUS_CHOICES, default='pending'
     )
     reconciliation_session = models.ForeignKey(
         'reconciliation.ReconciliationSession',
