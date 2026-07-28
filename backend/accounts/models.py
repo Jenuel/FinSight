@@ -14,12 +14,13 @@ class Account(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # Every account must have an owner: ownership is the only thing scoping one
+    # user's ledger from another's (see AccountViewSet.get_queryset). A nullable
+    # owner would let an ownerless, unreachable row exist in the DB.
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name='accounts',
-        null=True,
-        blank=True
     )
     name = models.CharField(max_length=100)
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
