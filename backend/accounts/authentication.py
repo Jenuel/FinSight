@@ -39,6 +39,16 @@ class ClerkJWTAuthentication(BaseAuthentication):
        on first login and syncing the email on every login.
     """
 
+    def authenticate_header(self, request):
+        """
+        Return the WWW-Authenticate header value for rejected requests.
+
+        Without this, DRF cannot build a challenge and downgrades every
+        unauthenticated response from 401 to 403, which tells a client it is
+        forbidden rather than that it needs to log in.
+        """
+        return 'Bearer realm="api"'
+
     def authenticate(self, request):
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
