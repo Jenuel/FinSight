@@ -9,14 +9,11 @@ class AccountViewSet(viewsets.ModelViewSet):
     serializer_class = AccountSerializer
 
     def get_queryset(self):
-        user = self.request.user
-        if user.is_authenticated:
-            return Account.objects.filter(user=user)
-        return Account.objects.filter(user__isnull=True)
+        # IsAuthenticated is enforced globally (see REST_FRAMEWORK in settings),
+        # so request.user is always a real user here. Scoping every read to the
+        # owner is what makes object-level permissions implicit on detail routes.
+        return Account.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
-        if self.request.user.is_authenticated:
-            serializer.save(user=self.request.user)
-        else:
-            serializer.save()
+        serializer.save(user=self.request.user)
 
