@@ -12,27 +12,46 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 import os
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 import dj_database_url
 
 # Load environment variables from .env file
 load_dotenv()
 
+
+def env_flag(name, default='False'):
+    """Read a boolean env var. Anything but true/1/t (case-insensitive) is False."""
+    return os.getenv(name, default).lower() in ('true', '1', 't')
+
+
+def env_list(name, default=''):
+    """Read a comma-separated env var into a list of non-empty, stripped values."""
+    return [item.strip() for item in os.getenv(name, default).split(',') if item.strip()]
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
+# Every security-sensitive setting below defaults to its SAFE value, so a missing
+# env var breaks the deploy instead of silently exposing it. Dev mode is opted
+# into (see .env.example / docker-compose.yml), never out of.
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-0ym27_%tteu(9!m5+0k1h79=gudve%ez#wj6((#owm26ct4ff(')
+# No fallback by design: the previous hardcoded default is public in git history,
+# so any fallback here is equivalent to having no secret at all.
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    raise ImproperlyConfigured(
+        'SECRET_KEY is not set. Generate one with: '
+        'python -c "import secrets; print(secrets.token_urlsafe(50))"'
+    )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 't')
+DEBUG = env_flag('DEBUG', 'False')
 
-# Read ALLOWED_HOSTS from env (comma-separated list, default is '*')
-ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', '*').split(',') if host.strip()]
+# Comma-separated list, e.g. "finsight.example.com,www.finsight.example.com".
+ALLOWED_HOSTS = env_list('ALLOWED_HOSTS')
 
 
 # Application definition
@@ -57,6 +76,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # WhiteNoise serves collected static files (Django admin's CSS) directly from
+    # the app process, so no separate web server is needed. Must sit immediately
+    # after SecurityMiddleware.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware', # CORS middleware must be placed before CommonMiddleware
     'django.middleware.common.CommonMiddleware',
@@ -158,15 +181,28 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS configuration
-CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'True').lower() in ('true', '1', 't')
-CORS_ALLOWED_ORIGINS = [
-    origin.strip() for origin in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if origin.strip()
-]
+CORS_ALLOW_ALL_ORIGINS = env_flag('CORS_ALLOW_ALL_ORIGINS')
+CORS_ALLOWED_ORIGINS = env_list('CORS_ALLOWED_ORIGINS')
+
+# Origins trusted for CSRF-protected (cookie-based) POSTs — in practice only the
+# Django admin, since the API authenticates with Bearer JWTs and never uses
+# session cookies. Behind an HTTPS proxy (e.g. https://<space>.hf.space) the
+# admin login form fails CSRF validation unless its origin is listed here.
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS')
 
 # Clerk JWT configuration
 CLERK_JWKS_URL = os.getenv('CLERK_JWKS_URL', '')
@@ -178,9 +214,7 @@ CLERK_ISSUER = os.getenv('CLERK_ISSUER', '')
 # Allow-list for the 'azp' (authorized party) claim - typically your frontend
 # origin(s), comma-separated (e.g. http://localhost:3000,https://app.example.com).
 # When set, a token whose azp is not in this list is rejected.
-CLERK_AUTHORIZED_PARTIES = [
-    p.strip() for p in os.getenv('CLERK_AUTHORIZED_PARTIES', '').split(',') if p.strip()
-]
+CLERK_AUTHORIZED_PARTIES = env_list('CLERK_AUTHORIZED_PARTIES')
 
 # Django REST Framework configuration
 REST_FRAMEWORK = {
@@ -190,5 +224,67 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+}
+
+# Production hardening. A misconfigured production deploy should refuse to boot
+# rather than serve every request unauthenticated or over plaintext.
+if not DEBUG:
+    if not ALLOWED_HOSTS:
+        raise ImproperlyConfigured(
+            'ALLOWED_HOSTS must be set when DEBUG=False (comma-separated hostnames).'
+        )
+    if not CLERK_JWKS_URL:
+        raise ImproperlyConfigured(
+            'CLERK_JWKS_URL must be set when DEBUG=False, otherwise every '
+            'authenticated request fails at runtime.'
+        )
+    if CORS_ALLOW_ALL_ORIGINS:
+        raise ImproperlyConfigured(
+            'CORS_ALLOW_ALL_ORIGINS must not be enabled when DEBUG=False. '
+            'List your frontend origins in CORS_ALLOWED_ORIGINS instead.'
+        )
+
+    # TLS is terminated at the platform proxy (Render/Fly/Vercel), so Django must
+    # trust X-Forwarded-Proto to know a request already arrived over HTTPS.
+    # Without this, SECURE_SSL_REDIRECT would redirect forever.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+
+# Logging: stream to stdout so the platform's log drain collects it. Without this
+# the logger in accounts/authentication.py has nowhere to write, making auth
+# failures and JWKS outages invisible in production.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {name} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': os.getenv('LOG_LEVEL', 'INFO'),
+    },
+    'loggers': {
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    },
 }
 
