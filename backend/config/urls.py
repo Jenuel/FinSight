@@ -14,21 +14,41 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+import logging
+
 from django.contrib import admin
 from django.urls import path, include
-from django.http import JsonResponse
+from django.db import connection
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+logger = logging.getLogger(__name__)
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def health_check(request):
-    return Response({
-        "status": "healthy",
-        "message": "FinSight Django backend is up and running!",
-        "framework": "Django REST Framework"
-    })
+    """
+    Liveness + readiness probe for the platform's health check.
+
+    Touches the database, because a process that is up but cannot reach Postgres
+    is not healthy - reporting 200 in that state would keep a broken instance in
+    the load balancer. Deliberately returns no version, settings, or error
+    detail: this endpoint is public, so it must not become a recon surface.
+    """
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+    except Exception:
+        logger.exception('Health check failed: database is unreachable')
+        return Response(
+            {'status': 'unhealthy'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    return Response({'status': 'healthy'})
 
 urlpatterns = [
     path('admin/', admin.site.urls),
