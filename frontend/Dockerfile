@@ -18,6 +18,16 @@ COPY . .
 # Next.js telemetry is disabled
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# NEXT_PUBLIC_* values are inlined into the client bundle at BUILD time, so they
+# must arrive as build args - passing them as runtime `environment:` has no
+# effect. They are public by definition; never pass a secret this way.
+ARG NEXT_PUBLIC_DATA_SOURCE=local
+ARG NEXT_PUBLIC_API_URL=http://127.0.0.1:8000/api
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+ENV NEXT_PUBLIC_DATA_SOURCE=$NEXT_PUBLIC_DATA_SOURCE
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+
 RUN npm run build
 
 # Production image, copy all the files and run next

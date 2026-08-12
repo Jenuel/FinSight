@@ -1,4 +1,15 @@
+# Secrets and local data must never be baked into an image.
 .env
+.env.*
+!.env.example
+db.sqlite3
+db.sqlite3-journal
+*.sqlite3
+
+# Local build output - regenerated in the image by collectstatic.
+staticfiles/
+media/
+
 .venv
 __pycache__
 *.pyc
