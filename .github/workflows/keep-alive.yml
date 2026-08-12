@@ -1,0 +1,49 @@
+# Pings the backend's health endpoint once every 24 hours so the free-tier
+# Hugging Face Space registers activity and is never put to sleep (HF pauses
+# free Spaces after 48 hours without traffic — a daily ping stays well inside
+# that window even if a scheduled run is delayed or dropped).
+#
+# Doubles as a daily uptime check: /api/health/ touches the database, so this
+# workflow goes red if the backend or Postgres is down, not just asleep.
+#
+# Required repository setting (Settings → Secrets and variables → Actions):
+#   variable BACKEND_HEALTH_URL - e.g. https://your-username-finsight-api.hf.space/api/health/
+#
+# NOTE: GitHub automatically disables scheduled workflows after 60 days with no
+# repository activity. If the project goes quiet, re-enable it from the Actions
+# tab or push a commit.
+
+name: Keep backend awake
+
+on:
+  schedule:
+    # Every 24 hours. GitHub may delay scheduled runs by a few minutes;
+    # irrelevant here since the sleep threshold is 48h.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    name: Ping /api/health/
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Ping health endpoint
+        env:
+          HEALTH_URL: ${{ vars.BACKEND_HEALTH_URL }}
+        run: |
+          if [ -z "$HEALTH_URL" ]; then
+            echo "::error::Set the BACKEND_HEALTH_URL repository variable to the Space's health endpoint."
+            exit 1
+          fi
+
+          # Generous retries: a Space that did fall asleep (e.g. after the
+          # workflow was paused) needs a couple of minutes to cold-start.
+          curl --fail --silent --show-error \
+               --retry 8 --retry-delay 30 --retry-all-errors \
+               --max-time 120 \
+               "$HEALTH_URL"
+          echo "Backend is awake and healthy."

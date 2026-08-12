@@ -1,0 +1,59 @@
+# Syncs backend/ to the Hugging Face Space on every push to main.
+#
+# The Space is its own git repo whose root must contain the Dockerfile and the
+# README.md with the Space metadata block. Since the backend lives in a
+# subdirectory here, this workflow builds a fresh single-commit history from
+# backend/ and force-pushes it — the GitHub repo stays the source of truth,
+# the Space is a deploy artifact.
+#
+# Required repository settings (Settings → Secrets and variables → Actions):
+#   secret   HF_TOKEN  - Hugging Face access token with WRITE scope
+#   variable HF_SPACE  - Space id, e.g. "your-username/finsight-api"
+
+name: Deploy backend to Hugging Face
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-hf.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deploys must land in order; cancelling a half-finished push helps nobody.
+concurrency:
+  group: deploy-hf
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Push backend/ to the Space
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push to Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+        run: |
+          if [ -z "$HF_TOKEN" ] || [ -z "$HF_SPACE" ]; then
+            echo "::error::Set the HF_TOKEN secret and HF_SPACE variable (owner/space-name) in the repo's Actions settings."
+            exit 1
+          fi
+
+          cd backend
+          git init --initial-branch=main
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Deploy ${GITHUB_SHA} from GitHub Actions"
+
+          # Token goes in the URL per HF's own GitHub-sync docs; git strips
+          # credentials from its error output, and the URL is never echoed.
+          HF_OWNER="${HF_SPACE%%/*}"
+          git push --force "https://${HF_OWNER}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" main
