@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Read-only by default: a compromised action shouldn't be able to push.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Django)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: finsight_test
+          POSTGRES_USER: finsight
+          POSTGRES_PASSWORD: finsight_ci
+        options: >-
+          --health-cmd "pg_isready -U finsight"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      # Throwaway CI values. Real secrets live in the platform dashboard.
+      SECRET_KEY: ci-only-secret-key-not-used-anywhere-else
+      DEBUG: "True"
+      DATABASE_URL: postgresql://finsight:finsight_ci@localhost:5432/finsight_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        # --frozen fails if uv.lock is out of sync with pyproject.toml, which is
+        # how the missing-dependency class of bug (auth importing an undeclared
+        # package) gets caught before it reaches production.
+        run: uv sync --frozen
+
+      - name: Run migrations
+        run: uv run python manage.py migrate --noinput
+
+      - name: Run tests
+        run: uv run python manage.py test --verbosity 2
+
+      - name: Django deploy check (production settings)
+        # The mechanical enforcement of the security defaults: this fails if
+        # anyone reintroduces DEBUG=True, a wildcard ALLOWED_HOSTS, permissive
+        # CORS, or drops the TLS/HSTS hardening.
+        env:
+          DEBUG: "False"
+          ALLOWED_HOSTS: finsight-api.hf.space
+          CORS_ALLOW_ALL_ORIGINS: "False"
+          CORS_ALLOWED_ORIGINS: https://finsight.vercel.app
+          CLERK_JWKS_URL: https://example.clerk.accounts.dev/.well-known/jwks.json
+          SECRET_KEY: ci-only-secret-key-long-enough-and-random-enough-to-pass-w009
+        run: uv run python manage.py check --deploy --fail-level WARNING
+
+      - name: Fail if migrations are missing
+        run: uv run python manage.py makemigrations --check --dry-run
+
+  frontend:
+    name: Frontend (Next.js)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        # Non-blocking on purpose: the repo currently has 31 pre-existing lint
+        # errors (mostly `any` at the API boundary). Making this blocking today
+        # would mean a permanently red CI, which teaches everyone to ignore it.
+        # Flip continue-on-error off once that debt is paid down.
+        continue-on-error: true
+        run: npm run lint
+
+      - name: Typecheck
+        # Blocking: this passes today and must keep passing.
+        run: npx tsc --noEmit
+
+      - name: Build
+        env:
+          # Publishable-key format only - not a real key, and public by design.
+          # Present so ClerkProvider can initialize during the build.
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
+          NEXT_PUBLIC_DATA_SOURCE: api
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:8000/api
+        run: npm run build
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: npm audit
+        working-directory: frontend
+        # Moderate advisories (the known postcss-via-next one) don't fail the
+        # build; high/critical do.
+        run: npm audit --audit-level=high
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: pip-audit (Python dependencies)
+        working-directory: backend
+        run: uvx pip-audit --strict -r <(uv export --frozen --no-dev --no-emit-project)
+        shell: bash
