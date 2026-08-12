@@ -1,8 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Account, Transaction, Category, FinanceState } from './types';
 import { getDataService } from './services/data-service';
+import { useAuth } from '@clerk/nextjs';
 
 interface FinanceContextType {
     state: FinanceState;
@@ -23,11 +24,16 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     const [isLoaded, setIsLoaded] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const { getToken } = useAuth();
+
+    // Stable getToken wrapper to use as a dependency / pass to services
+    const stableGetToken = useCallback(() => getToken(), [getToken]);
+
     // Initialize data on mount
     useEffect(() => {
         const loadData = async () => {
             try {
-                const service = getDataService();
+                const service = getDataService(stableGetToken);
                 const data = await service.fetchState();
                 setState(data);
                 setIsLoaded(true);
@@ -38,11 +44,11 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         };
         
         loadData();
-    }, []);
+    }, [stableGetToken]);
 
     const addAccount = async (accountData: Omit<Account, 'id' | 'createdAt'>) => {
         try {
-            const service = getDataService();
+            const service = getDataService(stableGetToken);
             const newAccount = await service.createAccount(accountData);
             setState((prev) => ({
                 ...prev,
@@ -56,7 +62,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
     const updateAccount = async (id: string, updates: Partial<Account>) => {
         try {
-            const service = getDataService();
+            const service = getDataService(stableGetToken);
             const updatedAccount = await service.updateAccount(id, updates);
             setState((prev) => ({
                 ...prev,
@@ -70,7 +76,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
     const deleteAccount = async (id: string) => {
         try {
-            const service = getDataService();
+            const service = getDataService(stableGetToken);
             await service.deleteAccount(id);
             setState((prev) => ({
                 ...prev,
@@ -85,7 +91,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
     const addTransaction = async (transactionData: Omit<Transaction, 'id'>) => {
         try {
-            const service = getDataService();
+            const service = getDataService(stableGetToken);
             const newTransaction = await service.createTransaction(transactionData);
             
             setState((prev) => {
@@ -112,13 +118,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
     const updateTransaction = async (id: string, updates: Partial<Transaction>) => {
         try {
-            const service = getDataService();
+            const service = getDataService(stableGetToken);
             const updatedTransaction = await service.updateTransaction(id, updates);
             
-            // To properly update balances when a transaction is modified, 
-            // the safest bet without recalculating everything is to refetch state,
-            // or we could do a local diff. Let's just refetch state to be completely synchronized,
-            // especially since backend might handle balance recalculation.
+            // Refetch state for perfect balance synchronization
             const newState = await service.fetchState();
             setState(newState);
             
@@ -130,7 +133,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
     const deleteTransaction = async (id: string) => {
         try {
-            const service = getDataService();
+            const service = getDataService(stableGetToken);
             await service.deleteTransaction(id);
             
             // Refetch state for perfect synchronization, especially for account balances.

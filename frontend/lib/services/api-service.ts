@@ -3,17 +3,24 @@ import { DataService } from './data-service';
 
 export class ApiService implements DataService {
     private baseUrl: string;
+    private getToken: () => Promise<string | null>;
 
-    constructor() {
+    constructor(getToken: () => Promise<string | null>) {
         this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
+        this.getToken = getToken;
     }
 
     private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
         const url = `${this.baseUrl}${endpoint}`;
-        const headers = {
+
+        const token = await this.getToken();
+        const headers: Record<string, string> = {
             'Content-Type': 'application/json',
-            ...options?.headers,
+            ...(options?.headers as Record<string, string>),
         };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
 
         const response = await fetch(url, { ...options, headers });
         
@@ -49,11 +56,15 @@ export class ApiService implements DataService {
         };
     }
 
-    private mapAccountToApi(account: Partial<Account>): any {
+    // `forCreate` decides how balance is sent. The API treats balance as derived
+    // state (it moves only via transactions), and accepts an opening figure once,
+    // as `initial_balance`, at creation. Sending `balance` on update is silently
+    // ignored by the serializer, so we don't send it at all.
+    private mapAccountToApi(account: Partial<Account>, forCreate = false): any {
         const payload: any = {};
         if (account.name !== undefined) payload.name = account.name;
         if (account.type !== undefined) payload.account_type = account.type;
-        if (account.balance !== undefined) payload.balance = account.balance;
+        if (forCreate && account.balance !== undefined) payload.initial_balance = account.balance;
         if (account.currency !== undefined) payload.currency = account.currency;
         if (account.color !== undefined) payload.color = account.color;
         if (account.icon !== undefined) payload.icon = account.icon;
@@ -101,7 +112,7 @@ export class ApiService implements DataService {
     }
 
     async createAccount(accountData: Omit<Account, 'id' | 'createdAt'>): Promise<Account> {
-        const payload = this.mapAccountToApi(accountData);
+        const payload = this.mapAccountToApi(accountData, true);
         const result = await this.request<any>('/accounts/', {
             method: 'POST',
             body: JSON.stringify(payload),

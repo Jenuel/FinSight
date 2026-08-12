@@ -17,18 +17,27 @@ export interface DataService {
 import { LocalStorageService } from './local-storage-service';
 import { ApiService } from './api-service';
 
-let serviceInstance: DataService | null = null;
+// Single source of truth for which backend the app talks to. Resolved at build
+// time (NEXT_PUBLIC_* is inlined by Next.js). When IS_API_MODE is true the app
+// uses the Django API and authenticates with Clerk; otherwise it runs fully on
+// localStorage for both authentication and dashboard data.
+export const DATA_SOURCE = process.env.NEXT_PUBLIC_DATA_SOURCE || 'local';
+export const IS_API_MODE = DATA_SOURCE === 'api';
 
-export function getDataService(): DataService {
-    if (serviceInstance) return serviceInstance;
+// LocalStorageService is stateless and can be a singleton.
+// ApiService requires a per-render getToken function, so it is instantiated in context.
+let localServiceInstance: LocalStorageService | null = null;
 
-    const source = process.env.NEXT_PUBLIC_DATA_SOURCE || 'local';
-    
-    if (source === 'api') {
-        serviceInstance = new ApiService();
-    } else {
-        serviceInstance = new LocalStorageService();
+export function getDataService(getToken?: () => Promise<string | null>): DataService {
+    if (IS_API_MODE) {
+        if (!getToken) {
+            throw new Error('getDataService: getToken is required when NEXT_PUBLIC_DATA_SOURCE=api');
+        }
+        return new ApiService(getToken);
     }
-    
-    return serviceInstance;
+
+    if (!localServiceInstance) {
+        localServiceInstance = new LocalStorageService();
+    }
+    return localServiceInstance;
 }
