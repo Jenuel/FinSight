@@ -4,10 +4,14 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useSignIn, useSignUp } from '@clerk/nextjs';
+import { IS_API_MODE } from '@/lib/services/data-service';
 
 interface AuthPageProps {
   onLoginSuccess: (email: string) => void;
 }
+
+// Label only - the demo has no account and no credentials behind it.
+const DEMO_EMAIL = 'demo@finsight.com';
 
 export function AuthPage({ onLoginSuccess }: AuthPageProps) {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -16,9 +20,7 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
-  // States for Auth Switch and OTP
-  const [useClerkAuth, setUseClerkAuth] = useState(true);
+
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState('');
 
@@ -29,10 +31,10 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
   const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!signUp) return;
-    
+
     setError('');
     setIsLoading(true);
-    
+
     try {
       const { error: verifyError } = await signUp.verifications.verifyEmailCode({ code });
       if (verifyError) {
@@ -57,6 +59,9 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
     }
   };
 
+  // Credentials are only ever handled by Clerk. There is deliberately no local
+  // password path: storing credentials in localStorage would mean shipping a
+  // plaintext credential store to every visitor.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -73,117 +78,67 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
 
     setIsLoading(true);
 
-    if (useClerkAuth) {
-      try {
-        if (isSignUp) {
-          if (!signUp) return;
+    try {
+      if (isSignUp) {
+        if (!signUp) return;
 
-          // Clerk v7: use signUp.password() for email+password sign-up
-          const { error: signUpError } = await signUp.password({
-            emailAddress: email,
-            password,
-            firstName: name,
-          });
+        // Clerk v7: use signUp.password() for email+password sign-up
+        const { error: signUpError } = await signUp.password({
+          emailAddress: email,
+          password,
+          firstName: name,
+        });
 
-          if (signUpError) {
-            setError(signUpError.longMessage || 'Sign-up failed. Please try again.');
-            setIsLoading(false);
+        if (signUpError) {
+          setError(signUpError.longMessage || 'Sign-up failed. Please try again.');
+          return;
+        }
+
+        // Trigger email verification code
+        const { error: sendError } = await signUp.verifications.sendEmailCode();
+        if (sendError) {
+          setError(sendError.longMessage || 'Failed to send verification email.');
+          return;
+        }
+
+        setPendingVerification(true);
+      } else {
+        if (!signIn) return;
+
+        // Clerk v7: use signIn.password() for email+password sign-in
+        const { error: signInError } = await signIn.password({
+          identifier: email,
+          password,
+        });
+
+        if (signInError) {
+          setError(signInError.longMessage || 'Invalid email or password.');
+          return;
+        }
+
+        if (signIn.status === 'complete') {
+          const { error: finalizeError } = await signIn.finalize();
+          if (finalizeError) {
+            setError(finalizeError.longMessage || 'Failed to start session.');
             return;
           }
-
-          // Trigger email verification code
-          const { error: sendError } = await signUp.verifications.sendEmailCode();
-          if (sendError) {
-            setError(sendError.longMessage || 'Failed to send verification email.');
-            setIsLoading(false);
-            return;
-          }
-
-          setPendingVerification(true);
-          setIsLoading(false);
+          onLoginSuccess(email);
         } else {
-          if (!signIn) return;
-
-          // Clerk v7: use signIn.password() for email+password sign-in
-          const { error: signInError } = await signIn.password({
-            identifier: email,
-            password,
-          });
-
-          if (signInError) {
-            setError(signInError.longMessage || 'Invalid email or password.');
-            setIsLoading(false);
-            return;
-          }
-
-          if (signIn.status === 'complete') {
-            const { error: finalizeError } = await signIn.finalize();
-            if (finalizeError) {
-              setError(finalizeError.longMessage || 'Failed to start session.');
-              setIsLoading(false);
-              return;
-            }
-            onLoginSuccess(email);
-          } else {
-            setError('Sign-in could not be completed. Additional steps may be required.');
-            setIsLoading(false);
-          }
+          setError('Sign-in could not be completed. Additional steps may be required.');
         }
-      } catch {
-        setError('Something went wrong. Please try again.');
-        setIsLoading(false);
       }
-    } else {
-      // Mock LocalStorage Auth Flow
-      setTimeout(() => {
-        try {
-          if (isSignUp) {
-            const users: { name: string; email: string; password: string }[] = JSON.parse(
-              localStorage.getItem('finsight-users') || '[]'
-            );
-            if (users.some((u) => u.email === email)) {
-              setError('An account with this email already exists.');
-              setIsLoading(false);
-              return;
-            }
-            users.push({ name, email, password });
-            localStorage.setItem('finsight-users', JSON.stringify(users));
-            onLoginSuccess(email);
-          } else {
-            if (email === 'demo@finsight.com' && password === 'password') {
-              onLoginSuccess(email);
-              return;
-            }
-            const users: { email: string; password: string }[] = JSON.parse(
-              localStorage.getItem('finsight-users') || '[]'
-            );
-            const user = users.find((u) => u.email === email && u.password === password);
-            if (!user) {
-              setError('Invalid email or password');
-              setIsLoading(false);
-              return;
-            }
-            onLoginSuccess(email);
-          }
-        } catch {
-          setError('Something went wrong. Please try again.');
-          setIsLoading(false);
-        }
-      }, 1000);
+    } catch {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  // Passwordless by design: the demo runs entirely on LocalStorageService with
+  // seeded data, so there is no account and nothing to authenticate against.
   const handleDemoLogin = () => {
-    if (useClerkAuth) {
-      setError('Demo login is only available in Local Storage mode.');
-      return;
-    }
     setIsLoading(true);
-    setEmail('demo@finsight.com');
-    setPassword('password');
-    setTimeout(() => {
-      onLoginSuccess('demo@finsight.com');
-    }, 800);
+    onLoginSuccess(DEMO_EMAIL);
   };
 
   return (
@@ -194,24 +149,6 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
 
       {/* Main card */}
       <div className="w-full max-w-md bg-card/65 backdrop-blur-xl border border-border/60 rounded-2xl shadow-2xl p-8 z-10 animate-fade-in-up">
-        
-        {/* Auth Switch Toggle */}
-        <div className="absolute top-4 right-4 flex items-center gap-2">
-          <span className="text-xs text-muted-foreground font-medium">
-            {useClerkAuth ? 'Clerk Auth' : 'Mock Auth'}
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              setUseClerkAuth(!useClerkAuth);
-              setError('');
-              setPendingVerification(false);
-            }}
-            className={`w-10 h-5 rounded-full p-1 transition-colors ${useClerkAuth ? 'bg-primary' : 'bg-muted-foreground/30'}`}
-          >
-            <div className={`w-3 h-3 rounded-full bg-white transition-transform ${useClerkAuth ? 'translate-x-5' : 'translate-x-0'}`} />
-          </button>
-        </div>
 
         {/* Brand Header */}
         <div className="flex flex-col items-center mb-8 mt-2">
@@ -224,16 +161,35 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
           <p className="text-sm text-muted-foreground mt-1">Pragmatic financial intelligence</p>
         </div>
 
-        {!pendingVerification ? (
+        {!IS_API_MODE ? (
+          /* Local mode: the app runs entirely on seeded localStorage data. There is
+             no account, so we ask for no credentials — just let people in. */
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground text-center">
+              You&apos;re viewing the offline demo. Explore a fully seeded workspace —
+              no account, no password, nothing to sign up for.
+            </p>
+            <Button
+              type="button"
+              onClick={handleDemoLogin}
+              className="w-full h-10 font-medium"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Loading demo...' : '⚡ Try the demo'}
+            </Button>
+            <p className="text-[10px] text-muted-foreground text-center">
+              Your data stays in this browser and never leaves your device.
+            </p>
+          </div>
+        ) : !pendingVerification ? (
           <>
             {/* Tab switcher */}
             <div className="flex border-b border-border mb-6">
               <button
                 type="button"
                 onClick={() => { setIsSignUp(false); setError(''); }}
-                className={`flex-1 pb-3 text-sm font-medium transition-colors relative ${
-                  !isSignUp ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-                }`}
+                className={`flex-1 pb-3 text-sm font-medium transition-colors relative ${!isSignUp ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
               >
                 Sign In
                 {!isSignUp && (
@@ -243,9 +199,8 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
               <button
                 type="button"
                 onClick={() => { setIsSignUp(true); setError(''); }}
-                className={`flex-1 pb-3 text-sm font-medium transition-colors relative ${
-                  isSignUp ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-                }`}
+                className={`flex-1 pb-3 text-sm font-medium transition-colors relative ${isSignUp ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
               >
                 Register
                 {isSignUp && (
@@ -328,27 +283,6 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
                 )}
               </Button>
 
-              {!isSignUp && (
-                <div className="relative flex py-3 items-center">
-                  <div className="flex-grow border-t border-border/80"></div>
-                  <span className="flex-shrink mx-4 text-[10px] text-muted-foreground uppercase tracking-widest">Or</span>
-                  <div className="flex-grow border-t border-border/80"></div>
-                </div>
-              )}
-
-              {!isSignUp && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleDemoLogin}
-                  className="w-full h-10 border-dashed border-primary/40 text-primary hover:bg-primary/5 hover:border-primary/60 transition-all font-medium group"
-                  disabled={isLoading || useClerkAuth}
-                >
-                  <span className="flex items-center gap-2">
-                    ⚡ Quick Demo Access {useClerkAuth && '(Mock Only)'}
-                  </span>
-                </Button>
-              )}
             </form>
           </>
         ) : (
@@ -360,14 +294,14 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
                 We&apos;ve sent a code to <span className="font-medium text-foreground">{email}</span>
               </p>
             </div>
-            
+
             <form onSubmit={handleVerifyOTP} className="space-y-4">
               {error && (
                 <div className="p-3 text-xs bg-destructive/10 border border-destructive/20 text-destructive rounded-lg animate-shake">
                   {error}
                 </div>
               )}
-              
+
               <div className="space-y-1.5">
                 <Input
                   label="Verification Code"
@@ -384,7 +318,7 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
                   }
                 />
               </div>
-              
+
               <Button type="submit" className="w-full h-10 mt-4 font-medium" disabled={isLoading || code.length < 6}>
                 {isLoading ? (
                   <span className="flex items-center gap-2">
@@ -398,7 +332,7 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
                   'Verify Code'
                 )}
               </Button>
-              
+
               <button
                 type="button"
                 onClick={() => setPendingVerification(false)}

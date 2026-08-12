@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { FinanceProvider, useFinance } from '@/lib/context';
+import { IS_API_MODE } from '@/lib/services/data-service';
 import { DashboardPage } from '@/components/pages/dashboard-page';
 import { AccountsPage } from '@/components/pages/accounts-page';
 import { TransactionsPage } from '@/components/pages/transactions-page';
@@ -29,8 +30,13 @@ export default function Home() {
     }
   }, []);
 
-  const isLoggedIn = isClerkSignedIn || isLocalLoggedIn;
-  const userEmail = clerkUser?.primaryEmailAddress?.emailAddress || localUserEmail;
+  // Auth mode is bound to the data source: API mode authenticates exclusively
+  // through Clerk (so every request carries a verifiable token); local mode uses
+  // the localStorage session for both auth and data. The two are never mixed.
+  const isLoggedIn = IS_API_MODE ? Boolean(isClerkSignedIn) : Boolean(isLocalLoggedIn);
+  const userEmail = IS_API_MODE
+    ? (clerkUser?.primaryEmailAddress?.emailAddress || '')
+    : localUserEmail;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -62,9 +68,10 @@ export default function Home() {
   }, []);
 
   const handleLoginSuccess = (email: string) => {
-    // If we're logging in via Mock Auth, the auth page will call this.
-    // We update local state just to be safe. If Clerk was used, it will automatically update isClerkSignedIn.
-    if (!isClerkSignedIn) {
+    // In API mode, Clerk owns the session — signIn.finalize() flips isClerkSignedIn
+    // automatically, so there is nothing to persist locally. In local mode we record
+    // the mock session in localStorage.
+    if (!IS_API_MODE) {
       localStorage.setItem('finsight-logged-in', 'true');
       localStorage.setItem('finsight-user-email', email);
       setIsLocalLoggedIn(true);
@@ -106,7 +113,10 @@ export default function Home() {
     }
   };
 
-  if (isLocalLoggedIn === null || !isClerkLoaded) {
+  // Wait for the relevant auth system to initialize: Clerk in API mode, the
+  // localStorage probe in local mode.
+  const initializing = IS_API_MODE ? !isClerkLoaded : isLocalLoggedIn === null;
+  if (initializing) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-background">
         <svg className="animate-spin h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24">
