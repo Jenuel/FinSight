@@ -44,6 +44,10 @@ services:
       - key: DATABASE_URL
         sync: false
 
+      # For Django admin login behind Render's HTTPS proxy (e.g. https://finsight-api.onrender.com)
+      - key: CSRF_TRUSTED_ORIGINS
+        sync: false
+
       # Clerk. CLERK_JWKS_URL is required when DEBUG=False (settings enforce it).
       # CLERK_ISSUER enables `iss` verification; CLERK_AUTHORIZED_PARTIES should
       # be your Vercel origin so tokens minted for another frontend are rejected.
