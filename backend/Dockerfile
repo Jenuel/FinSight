@@ -22,19 +22,14 @@ COPY . .
 RUN SECRET_KEY=build-only-placeholder DEBUG=True uv run python manage.py collectstatic --noinput
 
 # Run as an unprivileged user: a container process should not be root.
-# UID 1000 specifically because Hugging Face Spaces documents it as the
-# expected UID for Docker Spaces.
 RUN useradd --create-home --uid 1000 appuser \
     && chown -R appuser:appuser /app
 USER appuser
 
-# Hugging Face routes traffic to the port declared as `app_port` in README.md,
-# which is set to 8000 to match this.
+# Expose default port
 EXPOSE 8000
 
 # Gunicorn, not runserver: runserver is single-threaded, unsupported for
 # production, and explicitly documented by Django as not security-audited.
-# Migrations run at container start because HF Spaces has no release-phase
-# hook; the free tier runs exactly one replica, so there is no concurrent
-# instance to race against.
+# Automatically applies pending migrations and starts Gunicorn binding to $PORT.
 CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 3 --timeout 60 --access-logfile - --error-logfile -"]
