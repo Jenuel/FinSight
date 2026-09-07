@@ -1,50 +1,47 @@
----
-title: FinSight API
-emoji: 💰
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 8000
-pinned: false
----
-
 # FinSight API
 
-Django REST backend for FinSight, deployed as a Hugging Face **Docker Space**.
-This directory is pushed verbatim to the Space by
-`.github/workflows/deploy-hf.yml`, so the YAML block above is the Space's
-configuration: `sdk: docker` makes HF build the `Dockerfile`, and `app_port`
-tells its proxy which port gunicorn listens on.
+Django REST backend for FinSight, deployed as a Docker Web Service on **Render** (free tier).
 
-## Space configuration (Settings → Variables and secrets)
+## Deployment Options on Render
 
-The container refuses to boot until these are set — that is deliberate
-(see `config/settings.py`): a missing value breaks the deploy instead of
-silently running unconfigured.
+### Option A: Render Blueprint (Recommended)
+1. In the Render Dashboard, click **New +** → **Blueprint**.
+2. Connect this GitHub repository.
+3. Render detects `render.yaml` in the repo root and sets up `finsight-api`.
+4. Fill in the prompted environment variables (see below).
 
-**Secrets** (never as plain variables):
+### Option B: Manual Web Service
+1. In Render, click **New +** → **Web Service** → Connect your repository.
+2. Select **Docker** runtime.
+3. Set **Dockerfile Path** to `./backend/Dockerfile` and **Docker Context** to `./backend`.
+4. Choose the **Free** instance type.
+5. Set Health Check Path to `/api/health/`.
+6. Add the environment variables below.
 
-| Name | Value |
-|---|---|
-| `SECRET_KEY` | `python -c "import secrets; print(secrets.token_urlsafe(50))"` |
-| `DATABASE_URL` | Postgres connection string (e.g. Supabase). REQUIRED — the Space's own filesystem is ephemeral, so the SQLite fallback would be wiped on every restart. |
-| `CLERK_JWKS_URL` | `https://<your-app>.clerk.accounts.dev/.well-known/jwks.json` |
-| `CLERK_ISSUER` | `https://<your-app>.clerk.accounts.dev` |
+---
 
-**Variables** (non-secret config):
+## Required Environment Variables
 
-| Name | Value |
-|---|---|
-| `DEBUG` | `False` |
-| `ALLOWED_HOSTS` | `<owner>-<space-name>.hf.space` (the Space's direct URL host) |
-| `CORS_ALLOW_ALL_ORIGINS` | `False` |
-| `CORS_ALLOWED_ORIGINS` | Your Vercel origin(s), e.g. `https://finsight.vercel.app` |
-| `CSRF_TRUSTED_ORIGINS` | `https://<owner>-<space-name>.hf.space` (needed for `/admin/` only) |
-| `CLERK_AUTHORIZED_PARTIES` | Your Vercel origin(s) — tokens minted for any other frontend are rejected |
-| `LOG_LEVEL` | `INFO` |
+The container refuses to boot when `DEBUG=False` if required security variables are missing (see `config/settings.py`).
 
-## Health / keep-alive
+| Variable | Secret? | Description / Example |
+|---|---|---|
+| `SECRET_KEY` | Yes | Secure random key (Render generates this automatically with Blueprint). Or generate: `python -c "import secrets; print(secrets.token_urlsafe(50))"` |
+| `DATABASE_URL` | Yes | Postgres connection string (e.g. Supabase pooler URI). Required — container filesystem is ephemeral. |
+| `DEBUG` | No | `False` |
+| `ALLOWED_HOSTS` | No | Your Render hostname, e.g. `finsight-api.onrender.com` |
+| `CORS_ALLOW_ALL_ORIGINS` | No | `False` |
+| `CORS_ALLOWED_ORIGINS` | No | Your Vercel frontend URL, e.g. `https://finsight.vercel.app` |
+| `CSRF_TRUSTED_ORIGINS` | No | Your Render backend URL, e.g. `https://finsight-api.onrender.com` (needed for `/admin/`) |
+| `CLERK_JWKS_URL` | Yes | `https://<your-clerk-frontend-api>/.well-known/jwks.json` |
+| `CLERK_ISSUER` | Yes | `https://<your-clerk-frontend-api>` |
+| `CLERK_AUTHORIZED_PARTIES` | No | Same as Vercel frontend URL, e.g. `https://finsight.vercel.app` |
+| `LOG_LEVEL` | No | `INFO` |
+| `PORT` | No | `8000` (or leave default `$PORT` provided by Render) |
 
-`GET /api/health/` is public and touches the database. The GitHub Actions
-workflow `keep-alive.yml` pings it once a day so the free-tier Space never
-crosses HF's 48-hour inactivity threshold and gets put to sleep.
+---
+
+## Health Check
+
+* Endpoint: `GET /api/health/` (public, touches the database to verify service health).
+* Note on Render free-tier: Web services spin down after 15 minutes of inactivity; cold starts take ~50 seconds when a new request arrives.
