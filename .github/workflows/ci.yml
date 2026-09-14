@@ -144,5 +144,9 @@ jobs:
 
       - name: pip-audit (Python dependencies)
         working-directory: backend
-        run: uvx pip-audit --strict -r <(uv export --frozen --no-dev --no-emit-project)
+        # Audit the complete locked dependency set without resolving it again.
+        # A separate export command ensures export failures fail the step too.
+        run: |
+          uv export --locked --no-dev --no-emit-project --output-file "$RUNNER_TEMP/python-audit-requirements.txt" > /dev/null
+          uvx --python 3.12 pip-audit --strict --disable-pip -r "$RUNNER_TEMP/python-audit-requirements.txt"
         shell: bash
