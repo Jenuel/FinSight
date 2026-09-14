@@ -11,11 +11,9 @@ class ReconciliationSessionViewSet(viewsets.ModelViewSet):
     serializer_class = ReconciliationSessionSerializer
 
     def get_queryset(self):
-        user = self.request.user
-        if user.is_authenticated:
-            queryset = ReconciliationSession.objects.filter(account__user=user)
-        else:
-            queryset = ReconciliationSession.objects.filter(account__user__isnull=True)
+        queryset = ReconciliationSession.objects.select_related('account').filter(
+            account__user=self.request.user
+        )
 
         # Query parameter filtering
         account_id = self.request.query_params.get('account')

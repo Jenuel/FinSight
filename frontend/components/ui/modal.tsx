@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -11,39 +11,80 @@ interface ModalProps {
     description?: string;
     children: React.ReactNode;
     footer?: React.ReactNode;
-    size?: 'sm' | 'md' | 'lg';
+    size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
 export function Modal({ open, onOpenChange, title, description, children, footer, size = 'md' }: ModalProps) {
     const sizeClasses = {
         sm: 'max-w-sm',
-        md: 'max-w-md',
+        md: 'max-w-lg',
         lg: 'max-w-2xl',
+        xl: 'max-w-3xl',
     };
 
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && open) {
+                onOpenChange(false);
+            }
+        };
+        if (open) {
+            document.body.style.overflow = 'hidden';
+            window.addEventListener('keydown', handleKeyDown);
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [open, onOpenChange]);
+
+    if (!open) return null;
+
     return (
-        <>
-            {open && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className={cn('bg-card text-card-foreground rounded-2xl border border-border shadow-2xl w-full overflow-hidden transition-all duration-300', sizeClasses[size])}>
-                        <div className="flex items-start justify-between p-6 border-b border-border bg-secondary/10">
-                            <div>
-                                <h2 className="text-xl font-bold tracking-tight">{title}</h2>
-                                {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
-                            </div>
-                            <button
-                                onClick={() => onOpenChange(false)}
-                                className="text-muted-foreground hover:text-foreground hover:bg-secondary p-1.5 rounded-lg transition-colors cursor-pointer"
-                                aria-label="Close modal"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="p-6">{children}</div>
-                        {footer && <div className="p-6 border-t border-border bg-secondary/10 flex gap-2 justify-end">{footer}</div>}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 animate-fade-in">
+            {/* Backdrop */}
+            <div 
+                className="fixed inset-0 bg-black/70 backdrop-blur-md transition-opacity" 
+                onClick={() => onOpenChange(false)}
+                aria-hidden="true"
+            />
+
+            {/* Modal Dialog */}
+            <div
+                role="dialog"
+                aria-modal="true"
+                className={cn(
+                    'relative w-full rounded-2xl glass-card border border-border/70 shadow-2xl overflow-hidden z-10 animate-fade-in-up transition-all duration-200',
+                    sizeClasses[size]
+                )}
+            >
+                {/* Header */}
+                <div className="flex items-start justify-between px-6 py-5 border-b border-border/40 bg-secondary/20">
+                    <div className="space-y-1 pr-6">
+                        <h2 className="text-xl font-bold tracking-tight text-foreground">{title}</h2>
+                        {description && <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>}
                     </div>
+                    <button
+                        onClick={() => onOpenChange(false)}
+                        className="text-muted-foreground hover:text-foreground hover:bg-secondary p-2 rounded-xl transition-all duration-150 cursor-pointer shrink-0"
+                        aria-label="Close modal"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
                 </div>
-            )}
-        </>
+
+                {/* Content */}
+                <div className="p-6 max-h-[calc(85vh-130px)] overflow-y-auto">{children}</div>
+
+                {/* Footer */}
+                {footer && (
+                    <div className="px-6 py-4 border-t border-border/40 bg-secondary/15 flex items-center gap-2 justify-end">
+                        {footer}
+                    </div>
+                )}
+            </div>
+        </div>
     );
 }

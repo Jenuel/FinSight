@@ -32,11 +32,11 @@ class TransactionSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
     def validate_account(self, value):
+        # Prevents posting a transaction into someone else's account. The viewset's
+        # get_queryset() scopes reads; this scopes writes.
         request = self.context.get('request')
-        if request and request.user and request.user.is_authenticated:
-            if value.user != request.user:
-                raise serializers.ValidationError("You do not have permission to access this account.")
-        else:
-            if value.user is not None:
-                raise serializers.ValidationError("This account requires authentication.")
+        if not request or not request.user.is_authenticated:
+            raise serializers.ValidationError("Authentication is required.")
+        if value.user != request.user:
+            raise serializers.ValidationError("You do not have permission to access this account.")
         return value

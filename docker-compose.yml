@@ -1,4 +1,28 @@
+# LOCAL DEVELOPMENT ONLY.
+#
+# This file deliberately opts INTO dev mode (DEBUG=True, permissive CORS, a
+# throwaway DB password). Production is a Hugging Face Docker Space (backend,
+# see backend/README.md) + Vercel (frontend), where every secret comes from the
+# platform dashboard. Do not deploy this file.
+
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=finsight
+      - POSTGRES_USER=finsight
+      # Local-only throwaway credential; the DB is not exposed outside this network.
+      - POSTGRES_PASSWORD=finsight_local_dev
+    volumes:
+      # Named volume: without this, the database is wiped on every rebuild.
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finsight -d finsight"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -6,25 +30,52 @@ services:
     ports:
       - "8000:8000"
     environment:
+      - SECRET_KEY=local-dev-only-not-a-real-secret-key-do-not-reuse
       - DEBUG=True
+      - ALLOWED_HOSTS=localhost,127.0.0.1,backend
       - CORS_ALLOW_ALL_ORIGINS=True
       - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-    # You can uncomment and configure these if using Supabase or another DB
-    #  - DB_HOST=
-    #  - DB_NAME=postgres
-    #  - DB_USER=postgres
-    #  - DB_PASSWORD=
-    #  - DB_PORT=5432
+      - DATABASE_URL=postgresql://finsight:finsight_local_dev@db:5432/finsight
+      # Set these to exercise Clerk auth locally; leave blank for local demo mode.
+      - CLERK_JWKS_URL=${CLERK_JWKS_URL:-}
+      - CLERK_ISSUER=${CLERK_ISSUER:-}
+      - CLERK_AUTHORIZED_PARTIES=${CLERK_AUTHORIZED_PARTIES:-http://localhost:3000}
+    # Migrations run at startup here, same as production (the HF Space runs a
+    # single instance, so there is no concurrent migrator to race against).
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --access-logfile -"
+    depends_on:
+      db:
+        # Wait for readiness, not just start order - plain depends_on lets Django
+        # boot before Postgres accepts connections.
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      # Build args, not `environment`: NEXT_PUBLIC_* is inlined at build time.
+      args:
+        # Defaults to the offline demo so `docker compose up` works with no setup.
+        # Set NEXT_PUBLIC_DATA_SOURCE=api (plus a Clerk key) to hit the backend.
+        - NEXT_PUBLIC_DATA_SOURCE=${NEXT_PUBLIC_DATA_SOURCE:-local}
+        # Must include /api - ApiService appends paths directly to this.
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+        - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
     ports:
       - "3000:3000"
     depends_on:
-      - backend
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      backend:
+        condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  postgres_data:

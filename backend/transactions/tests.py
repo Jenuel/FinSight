@@ -11,13 +11,7 @@ class TransactionTests(APITestCase):
         self.user1 = User.objects.create_user(username='user1', password='password123')
         self.user2 = User.objects.create_user(username='user2', password='password123')
 
-        # Create some test accounts
-        self.public_account = Account.objects.create(
-            name='Public Account',
-            balance=100.00,
-            currency='USD',
-            account_type='cash'
-        )
+        # Every account must have an owner - there is no public/ownerless account.
         self.user1_account = Account.objects.create(
             name='User1 Checking',
             balance=1000.00,
@@ -42,18 +36,8 @@ class TransactionTests(APITestCase):
 
         self.list_create_url = reverse('transaction-list')
 
-    def test_list_transactions_unauthenticated(self):
-        """
-        Unauthenticated requests should only return transactions for public accounts.
-        """
-        # Create a public transaction
-        Transaction.objects.create(
-            account=self.public_account,
-            transaction_type='expense',
-            amount=20.00,
-            category='Food'
-        )
-        # Create a private user1 transaction
+    def test_list_transactions_unauthenticated_is_rejected(self):
+        """Anonymous reads are refused - transactions are never publicly listable."""
         Transaction.objects.create(
             account=self.user1_account,
             transaction_type='income',
@@ -61,23 +45,13 @@ class TransactionTests(APITestCase):
             category='Salary'
         )
 
-        # Let's hit the endpoint
         response = self.client.get(self.list_create_url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]['category'], 'Food')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_list_transactions_authenticated(self):
         """
         Authenticated requests should only return transactions for the user's accounts.
         """
-        # Create public transaction
-        Transaction.objects.create(
-            account=self.public_account,
-            transaction_type='expense',
-            amount=20.00,
-            category='Food'
-        )
         # Create user1 transaction
         Transaction.objects.create(
             account=self.user1_account,
@@ -99,26 +73,9 @@ class TransactionTests(APITestCase):
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]['category'], 'Salary')
 
-    def test_create_transaction_unauthenticated(self):
+    def test_create_transaction_unauthenticated_is_rejected(self):
         """
-        Unauthenticated requests can create transactions on public accounts.
-        """
-        data = {
-            'account': self.public_account.id,
-            'transaction_type': 'expense',
-            'amount': '25.00',
-            'category': 'Books'
-        }
-        # Start balance: 100.00. Expect 100.00 - 25.00 = 75.00
-        response = self.client.post(self.list_create_url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        
-        self.public_account.refresh_from_db()
-        self.assertEqual(self.public_account.balance, 75.00)
-
-    def test_create_transaction_unauthenticated_on_private_account(self):
-        """
-        Unauthenticated requests cannot create transactions on user-owned accounts.
+        Anonymous writes are refused and must not move any balance.
         """
         data = {
             'account': self.user1_account.id,
@@ -127,7 +84,10 @@ class TransactionTests(APITestCase):
             'category': 'Gift'
         }
         response = self.client.post(self.list_create_url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        self.user1_account.refresh_from_db()
+        self.assertEqual(self.user1_account.balance, 1000.00)
 
     def test_create_income_transaction_authenticated(self):
         """

@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import React from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     variant?: 'primary' | 'secondary' | 'destructive' | 'outline' | 'ghost';
@@ -7,20 +8,20 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export function Button({ variant = 'primary', size = 'md', className, children, ...props }: ButtonProps) {
-    const baseStyles = 'font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed';
+    const baseStyles = 'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 outline-none select-none cursor-pointer active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none disabled:active:scale-100';
 
     const variantStyles = {
-        primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        destructive: 'bg-destructive text-white hover:bg-destructive/90',
-        outline: 'border border-primary text-primary hover:bg-primary/10',
-        ghost: 'text-foreground hover:bg-muted',
+        primary: 'bg-primary text-primary-foreground hover:opacity-90 shadow-xs font-semibold',
+        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border/50',
+        destructive: 'bg-destructive/15 text-destructive hover:bg-destructive hover:text-white border border-destructive/20',
+        outline: 'border border-border/80 bg-background/50 hover:bg-secondary text-foreground hover:border-foreground/20',
+        ghost: 'text-muted-foreground hover:text-foreground hover:bg-secondary/80',
     };
 
     const sizeStyles = {
-        sm: 'px-3 py-1.5 text-sm',
-        md: 'px-4 py-2 text-base',
-        lg: 'px-6 py-3 text-lg',
+        sm: 'h-8 px-3 text-xs gap-1.5',
+        md: 'h-9.5 px-4 text-sm gap-2',
+        lg: 'h-11 px-6 text-base gap-2.5 font-semibold',
     };
 
     return (

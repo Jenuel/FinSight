@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
+import { FinanceIcon } from '@/components/ui/finance-icon';
 import {
   PieChart,
   Pie,
@@ -39,15 +40,15 @@ import {
 } from 'recharts';
 
 const CATEGORY_COLORS: Record<string, string> = {
-  food: '#fb923c',        // orange
-  transport: '#60a5fa',   // blue
-  utilities: '#fbbf24',   // amber
-  entertainment: '#c084fc', // purple
-  healthcare: '#34d399',  // emerald
-  shopping: '#f472b6',    // pink
-  subscription: '#f87171', // red
-  travel: '#22d3ee',      // cyan
-  'other-expense': '#9ca3af', // gray
+  food: '#f97316',        // warm orange
+  transport: '#3b82f6',   // slate blue
+  utilities: '#f59e0b',   // amber
+  entertainment: '#a855f7', // purple
+  healthcare: '#10b981',  // natural emerald
+  shopping: '#ec4899',    // rose pink
+  subscription: '#ef4444', // crimson
+  travel: '#0ea5e9',      // ocean sky
+  'other-expense': '#94a3b8', // slate gray
 };
 
 const formatCurrency = (amount: number) => {
@@ -55,6 +56,28 @@ const formatCurrency = (amount: number) => {
     style: 'currency',
     currency: 'USD',
   }).format(amount);
+};
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="glass-card px-3.5 py-2.5 rounded-xl border border-border/80 shadow-2xl text-xs space-y-1 z-50">
+        {label && <p className="font-semibold text-foreground text-xs">{label}</p>}
+        {payload.map((pld: any) => (
+          <div key={pld.name} className="flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: pld.color || pld.fill }} />
+              <span className="text-muted-foreground">{pld.name}:</span>
+            </div>
+            <span className="font-mono font-bold text-foreground tabular-nums">
+              {formatCurrency(pld.value)}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
 };
 
 export function AnalyticsPage() {
@@ -436,23 +459,7 @@ export function AnalyticsPage() {
       .slice(0, 5);
   }, [currentTxns]);
 
-  // Recharts custom elements
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-card/95 border border-border px-3 py-2 rounded-lg shadow-lg backdrop-blur text-sm">
-          <p className="text-xs text-muted-foreground mb-1">{label}</p>
-          {payload.map((pld: any) => (
-            <p key={pld.name} className="font-semibold flex items-center gap-1.5" style={{ color: pld.color || pld.fill }}>
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: pld.color || pld.fill }} />
-              {pld.name}: {formatCurrency(pld.value)}
-            </p>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
+
 
   const renderKPIChange = (value: number, isGoodDecrease = false) => {
     if (!metrics.hasPrevPeriod) return null;
@@ -487,39 +494,50 @@ export function AnalyticsPage() {
 
   if (!isMounted) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="space-y-8 animate-fade-in">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="space-y-2">
-            <div className="h-8 w-48 bg-muted animate-pulse rounded" />
-            <div className="h-4 w-64 bg-muted animate-pulse rounded" />
+            <div className="h-8 w-56 bg-secondary/60 animate-pulse rounded-lg" />
+            <div className="h-4 w-72 bg-secondary/40 animate-pulse rounded-md" />
+          </div>
+          <div className="h-10 w-44 bg-secondary/60 animate-pulse rounded-2xl" />
+        </div>
+        <div className="rounded-2xl glass-card border border-border/70 p-5">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 divide-y lg:divide-y-0 lg:divide-x divide-border/40">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="space-y-2 p-2">
+                <div className="h-3 w-20 bg-secondary/60 animate-pulse rounded" />
+                <div className="h-7 w-28 bg-secondary/80 animate-pulse rounded" />
+                <div className="h-3 w-16 bg-secondary/40 animate-pulse rounded" />
+              </div>
+            ))}
           </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i} className="h-28 bg-card animate-pulse" />
-          ))}
-        </div>
         <div className="grid gap-6 md:grid-cols-2">
-          <Card className="h-96 bg-card animate-pulse" />
-          <Card className="h-96 bg-card animate-pulse" />
+          <div className="h-80 rounded-2xl bg-card/60 border border-border/50 animate-pulse" />
+          <div className="h-80 rounded-2xl bg-card/60 border border-border/50 animate-pulse" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-fade-in">
       {/* Header & Date Range Filter */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Analytics</h1>
-          <p className="text-muted-foreground mt-1">Advanced insights into your financial health</p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold font-heading tracking-tight text-foreground">
+            Financial Intelligence
+          </h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+            Deep analytical telemetry on spending velocity, category distributions, and wealth trajectories.
+          </p>
         </div>
-        <div className="flex items-center gap-1.5 bg-muted p-1 rounded-lg self-start sm:self-center select-none shrink-0">
+        <div className="flex items-center gap-1 bg-secondary/50 p-1.5 rounded-2xl border border-border/60 self-start sm:self-center select-none shrink-0 shadow-xs">
           <button
             onClick={handlePrevMonth}
             disabled={currentIndex === monthOptions.length - 1}
-            className="p-1.5 rounded-md hover:bg-background text-foreground hover:shadow-xs disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
+            className="p-1.5 rounded-xl hover:bg-card text-foreground disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
             aria-label="Previous Month"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -530,7 +548,7 @@ export function AnalyticsPage() {
           <button
             onClick={handleNextMonth}
             disabled={currentIndex === 0}
-            className="p-1.5 rounded-md hover:bg-background text-foreground hover:shadow-xs disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
+            className="p-1.5 rounded-xl hover:bg-card text-foreground disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
             aria-label="Next Month"
           >
             <ChevronRight className="w-4 h-4" />
@@ -538,65 +556,45 @@ export function AnalyticsPage() {
         </div>
       </div>
 
-      {/* KPI Cards Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* Total Expense KPI */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-base font-bold text-foreground">Total Spent</p>
-              <div className="w-7 h-7 rounded-full expense-bg flex items-center justify-center">
-                <ArrowUpRight className="w-4 h-4 expense-text" />
-              </div>
-            </div>
-            <p key={`spent-${selectedMonth}`} className="text-2xl font-bold expense-text animate-fade-in-up" style={{ animationDelay: '0ms' }}>{formatCurrency(metrics.totalSpent)}</p>
+      {/* Fluid Executive Metrics Ribbon (De-boxed) */}
+      <div className="rounded-2xl glass-card border border-border/70 p-5">
+        <div key={selectedMonth} className="grid grid-cols-2 lg:grid-cols-4 gap-6 divide-y lg:divide-y-0 lg:divide-x divide-border/40 animate-fade-in">
+          {/* Total Expense KPI */}
+          <div className="space-y-1 pr-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block">Period Outflows</span>
+            <p className="text-xl sm:text-2xl font-bold font-heading font-mono expense-text tabular-nums">
+              {formatCurrency(metrics.totalSpent)}
+            </p>
             {renderKPIChange(metrics.spentChange, true)}
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Total Income KPI */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-base font-bold text-foreground">Total Income</p>
-              <div className="w-7 h-7 rounded-full income-bg flex items-center justify-center">
-                <ArrowDownLeft className="w-4 h-4 income-text" />
-              </div>
-            </div>
-            <p key={`income-${selectedMonth}`} className="text-2xl font-bold income-text animate-fade-in-up" style={{ animationDelay: '100ms' }}>{formatCurrency(metrics.totalIncome)}</p>
+          {/* Total Income KPI */}
+          <div className="space-y-1 pt-4 lg:pt-0 lg:px-4">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block">Period Inflows</span>
+            <p className="text-xl sm:text-2xl font-bold font-heading font-mono income-text tabular-nums">
+              {formatCurrency(metrics.totalIncome)}
+            </p>
             {renderKPIChange(metrics.incomeChange, false)}
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Net Savings KPI */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-base font-bold text-foreground">Net Cash Flow</p>
-              <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
-                <Wallet className="w-4 h-4 text-primary" />
-              </div>
-            </div>
-            <p key={`net-${selectedMonth}`} className={`text-2xl font-bold animate-fade-in-up ${metrics.netCashFlow >= 0 ? 'income-text' : 'expense-text'}`} style={{ animationDelay: '200ms' }}>
+          {/* Net Savings KPI */}
+          <div className="space-y-1 pt-4 lg:pt-0 lg:px-4">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block">Net Cash Flow</span>
+            <p className={`text-xl sm:text-2xl font-bold font-heading font-mono tabular-nums ${metrics.netCashFlow >= 0 ? 'income-text' : 'expense-text'}`}>
               {metrics.netCashFlow >= 0 ? '+' : ''}{formatCurrency(metrics.netCashFlow)}
             </p>
-            <span className="text-xs text-muted-foreground mt-1">Income minus expenses</span>
-          </CardContent>
-        </Card>
+            <span className="text-xs text-muted-foreground block">Inflow minus outflow</span>
+          </div>
 
-        {/* Savings Rate KPI */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-base font-bold text-foreground">Savings Rate</p>
-              <div className="w-7 h-7 rounded-full bg-indigo-500/10 flex items-center justify-center">
-                <Percent className="w-4 h-4 text-indigo-500" />
-              </div>
-            </div>
-            <p key={`savings-${selectedMonth}`} className="text-2xl font-bold text-foreground animate-fade-in-up" style={{ animationDelay: '300ms' }}>{metrics.savingsRate.toFixed(1)}%</p>
-            <span className="text-xs text-muted-foreground mt-1">Percentage of income saved</span>
-          </CardContent>
-        </Card>
+          {/* Savings Rate KPI */}
+          <div className="space-y-1 pt-4 lg:pt-0 lg:pl-4">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block">Savings Rate</span>
+            <p className="text-xl sm:text-2xl font-bold font-heading font-mono text-foreground tabular-nums">
+              {metrics.savingsRate.toFixed(1)}%
+            </p>
+            <span className="text-xs text-muted-foreground block">Percentage retained</span>
+          </div>
+        </div>
       </div>
 
       {/* Main Charts Grid */}
@@ -608,25 +606,25 @@ export function AnalyticsPage() {
               <CardTitle>Spending by Category</CardTitle>
               <CardDescription>Visual breakdown of expenses</CardDescription>
             </div>
-            <div className="flex items-center gap-0.5 bg-card p-0.5 rounded-lg self-start sm:self-center select-none shrink-0">
+            <div className="flex items-center gap-1 bg-secondary/50 p-1.5 rounded-2xl border border-border/60 self-start sm:self-center select-none shrink-0 shadow-xs">
               <button
                 onClick={handlePrevCategoryMonth}
                 disabled={categoryIndex === monthOptions.length - 1}
-                className="p-1.5 rounded-md hover:bg-muted text-foreground hover:shadow-xs disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
+                className="p-1.5 rounded-xl hover:bg-card text-foreground disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
                 aria-label="Previous Category Month"
               >
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="text-sm font-bold px-2 min-w-[115px] text-center text-foreground uppercase tracking-wider">
+              <span className="text-xs font-bold px-2.5 min-w-[120px] text-center text-foreground uppercase tracking-wider">
                 {monthOptions[categoryIndex]?.label}
               </span>
               <button
                 onClick={handleNextCategoryMonth}
                 disabled={categoryIndex === 0}
-                className="p-1.5 rounded-md hover:bg-muted text-foreground hover:shadow-xs disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
+                className="p-1.5 rounded-xl hover:bg-card text-foreground disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
                 aria-label="Next Category Month"
               >
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </CardHeader>
@@ -636,7 +634,7 @@ export function AnalyticsPage() {
                 {/* Donut chart with overlay absolute text in center */}
                 <div className="relative w-48 h-48 sm:w-56 sm:h-56 shrink-0 flex items-center justify-center">
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
+                    <PieChart key={categoryMonth}>
                       <Pie
                         data={categoryData}
                         cx="50%"
@@ -645,6 +643,9 @@ export function AnalyticsPage() {
                         outerRadius={90}
                         paddingAngle={3}
                         dataKey="value"
+                        isAnimationActive={true}
+                        animationDuration={600}
+                        animationEasing="ease-out"
                       >
                         {categoryData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
@@ -666,7 +667,9 @@ export function AnalyticsPage() {
                   {categoryData.map((cat) => (
                     <div key={cat.id} className="flex items-center justify-between text-xs hover:bg-muted/40 p-1.5 rounded transition-colors">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-sm shrink-0">{cat.icon}</span>
+                        <div className="w-5 h-5 rounded bg-secondary/80 flex items-center justify-center shrink-0">
+                          <FinanceIcon id={cat.id} size={12} className="text-foreground/80" />
+                        </div>
                         <span className="font-medium text-foreground truncate">{cat.name}</span>
                       </div>
                       <span className="font-semibold text-muted-foreground shrink-0 pl-2">
@@ -698,8 +701,24 @@ export function AnalyticsPage() {
                 <YAxis tickLine={false} axisLine={false} tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--muted)', opacity: 0.15 }} />
                 <Legend iconSize={10} iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
-                <Bar dataKey="Income" fill="var(--income)" radius={[4, 4, 0, 0]} name="Income" />
-                <Bar dataKey="Expenses" fill="var(--expense)" radius={[4, 4, 0, 0]} name="Expenses" />
+                <Bar 
+                  dataKey="Income" 
+                  fill="var(--income)" 
+                  radius={[4, 4, 0, 0]} 
+                  name="Income"
+                  isAnimationActive={true}
+                  animationDuration={600}
+                  animationEasing="ease-out"
+                />
+                <Bar 
+                  dataKey="Expenses" 
+                  fill="var(--expense)" 
+                  radius={[4, 4, 0, 0]} 
+                  name="Expenses"
+                  isAnimationActive={true}
+                  animationDuration={600}
+                  animationEasing="ease-out"
+                />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -714,13 +733,13 @@ export function AnalyticsPage() {
             <CardDescription>Visualizing your expenses flow over time</CardDescription>
           </div>
           {/* Daily/Monthly/Yearly switcher */}
-          <div className="flex bg-muted p-1 rounded-lg self-start sm:self-center">
+          <div className="flex bg-secondary/50 p-1 rounded-xl border border-border/50 self-start sm:self-center">
             {(['daily', 'monthly', 'yearly'] as const).map((mode) => (
               <button
                 key={mode}
                 onClick={() => setTrendMode(mode)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all capitalize cursor-pointer ${
-                  trendMode === mode ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all capitalize cursor-pointer ${
+                  trendMode === mode ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {mode}
@@ -731,7 +750,7 @@ export function AnalyticsPage() {
         <CardContent>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={spendingOverTime} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <AreaChart key={trendMode} data={spendingOverTime} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="spendColor" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.25} />
@@ -750,6 +769,9 @@ export function AnalyticsPage() {
                   fillOpacity={1}
                   fill="url(#spendColor)"
                   name="Spent"
+                  isAnimationActive={true}
+                  animationDuration={500}
+                  animationEasing="ease-out"
                   dot={{ r: 4, fill: 'var(--background)', stroke: 'var(--primary)', strokeWidth: 2 }}
                   activeDot={{ r: 6, fill: 'var(--primary)', stroke: 'var(--background)', strokeWidth: 2 }}
                 />
@@ -773,7 +795,9 @@ export function AnalyticsPage() {
                 <div key={cat.id} className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs sm:text-sm">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-lg shrink-0">{cat.icon}</span>
+                      <div className="w-6 h-6 rounded-md bg-secondary/80 flex items-center justify-center shrink-0 border border-border/40">
+                        <FinanceIcon id={cat.id} size={13} className="text-foreground/80" />
+                      </div>
                       <span className="font-semibold text-foreground truncate">{cat.name}</span>
                     </div>
                     <span className="font-bold text-foreground shrink-0 pl-2">
@@ -818,7 +842,9 @@ export function AnalyticsPage() {
                       className="flex items-center justify-between p-2.5 rounded-lg hover:bg-muted/50 border border-transparent hover:border-border transition-colors text-xs sm:text-sm"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-xl shrink-0">{category?.icon || '📌'}</span>
+                        <div className="w-8 h-8 rounded-xl bg-secondary/60 border border-border/40 flex items-center justify-center shrink-0 text-foreground/80">
+                          <FinanceIcon id={txn.category} size={16} />
+                        </div>
                         <div className="min-w-0">
                           <p className="font-semibold text-foreground truncate">{txn.description}</p>
                           <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
@@ -862,13 +888,13 @@ export function AnalyticsPage() {
             </CardDescription>
           </div>
           {/* Daily/Monthly/Yearly switcher */}
-          <div className="flex bg-muted p-1 rounded-lg self-start sm:self-center">
+          <div className="flex bg-secondary/50 p-1 rounded-xl border border-border/50 self-start sm:self-center">
             {(['daily', 'monthly', 'yearly'] as const).map((mode) => (
               <button
                 key={mode}
                 onClick={() => setBalanceTrendMode(mode)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all capitalize cursor-pointer ${
-                  balanceTrendMode === mode ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all capitalize cursor-pointer ${
+                  balanceTrendMode === mode ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {mode}
@@ -879,7 +905,7 @@ export function AnalyticsPage() {
         <CardContent>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={balanceOverTime} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <AreaChart key={balanceTrendMode} data={balanceOverTime} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="balanceColor" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={balanceTrendColor} stopOpacity={0.25} />
@@ -898,6 +924,9 @@ export function AnalyticsPage() {
                   fillOpacity={1}
                   fill="url(#balanceColor)"
                   name="Balance"
+                  isAnimationActive={true}
+                  animationDuration={500}
+                  animationEasing="ease-out"
                   dot={{ r: 4, fill: 'var(--background)', stroke: balanceTrendColor, strokeWidth: 2 }}
                   activeDot={{ r: 6, fill: balanceTrendColor, stroke: 'var(--background)', strokeWidth: 2 }}
                 />

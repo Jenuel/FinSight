@@ -9,11 +9,11 @@ class TransactionViewSet(viewsets.ModelViewSet):
     serializer_class = TransactionSerializer
 
     def get_queryset(self):
-        user = self.request.user
-        if user.is_authenticated:
-            queryset = Transaction.objects.filter(account__user=user)
-        else:
-            queryset = Transaction.objects.filter(account__user__isnull=True)
+        # select_related('account') because TransactionSerializer embeds
+        # account_details; without it, listing N transactions costs N+1 queries.
+        queryset = Transaction.objects.select_related('account').filter(
+            account__user=self.request.user
+        )
 
         # Query parameter filtering
         account_id = self.request.query_params.get('account')

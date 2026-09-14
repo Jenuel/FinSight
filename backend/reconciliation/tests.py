@@ -102,3 +102,73 @@ class ReconciliationTests(APITestCase):
         # Check that the account balance is exactly 120.00 (no double-adjustment!)
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('120.00'))
+
+    def test_reconciliation_close_marks_pending_as_cleared(self):
+        """
+        Closing a session should bulk-update all 'pending' transactions inside the
+        period to 'cleared'.  This is the invariant that was silently broken when
+        migration 0006 replaced the status vocabulary without updating
+        reconciliation/models.py.
+        """
+        today = timezone.localdate()
+        period_start = today - timezone.timedelta(days=5)
+
+        # Create two pending transactions inside the period
+        tx1 = Transaction.objects.create(
+            account=self.account,
+            transaction_type='income',
+            amount=Decimal('30.00'),
+            category='Salary',
+            transaction_date=period_start + timezone.timedelta(days=1),
+            reconciliation_status='pending',
+        )
+        tx2 = Transaction.objects.create(
+            account=self.account,
+            transaction_type='expense',
+            amount=Decimal('10.00'),
+            category='Coffee',
+            transaction_date=period_start + timezone.timedelta(days=2),
+            reconciliation_status='pending',
+        )
+        self.account.refresh_from_db()
+        # balance: 100 + 30 - 10 = 120
+
+        session = ReconciliationSession.objects.create(
+            account=self.account,
+            period_start=period_start,
+            opening_balance=Decimal('100.00'),
+        )
+
+        self.client.force_authenticate(user=self.user)
+        url = reverse('reconciliation-close', kwargs={'pk': session.id})
+        # actual matches expected (120) → no variance → no adjustment tx
+        response = self.client.post(url, {'actual_balance': '120.00'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        tx1.refresh_from_db()
+        tx2.refresh_from_db()
+        self.assertEqual(tx1.reconciliation_status, 'cleared')
+        self.assertEqual(tx2.reconciliation_status, 'cleared')
+
+    def test_reconciliation_close_adjustment_has_adjusted_status(self):
+        """
+        The auto-generated adjustment transaction must carry
+        reconciliation_status='adjusted' — not any other value.
+        """
+        session = ReconciliationSession.objects.create(
+            account=self.account,
+            period_start=timezone.localdate() - timezone.timedelta(days=1),
+            opening_balance=Decimal('100.00'),
+        )
+
+        self.client.force_authenticate(user=self.user)
+        url = reverse('reconciliation-close', kwargs={'pk': session.id})
+        # variance = 130 - 100 = +30
+        response = self.client.post(url, {'actual_balance': '130.00'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        adjustment = Transaction.objects.get(is_adjustment=True)
+        self.assertEqual(adjustment.reconciliation_status, 'adjusted')
+        self.assertEqual(adjustment.amount, Decimal('30.00'))
+        self.assertEqual(adjustment.transaction_type, 'income')
+
