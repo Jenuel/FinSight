@@ -45,7 +45,7 @@ export function generateMockData(): FinanceState {
             currency: 'USD',
             createdAt: new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString(),
             color: ACCOUNT_COLORS[0],
-            icon: '🏦',
+            icon: 'bank',
         },
         {
             id: 'acc-2',
@@ -55,7 +55,7 @@ export function generateMockData(): FinanceState {
             currency: 'USD',
             createdAt: new Date(now.getTime() - 200 * 24 * 60 * 60 * 1000).toISOString(),
             color: ACCOUNT_COLORS[1],
-            icon: '🐷',
+            icon: 'savings',
         },
         {
             id: 'acc-3',
@@ -65,7 +65,7 @@ export function generateMockData(): FinanceState {
             currency: 'USD',
             createdAt: new Date(now.getTime() - 150 * 24 * 60 * 60 * 1000).toISOString(),
             color: ACCOUNT_COLORS[2],
-            icon: '💳',
+            icon: 'card',
         },
     ];
 
@@ -75,7 +75,7 @@ export function generateMockData(): FinanceState {
     const expenseCategories = ['food', 'transport', 'utilities', 'entertainment', 'shopping', 'subscription'];
 
     // Add income transactions (monthly salary)
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i <= 3; i++) {
         const date = new Date(threeMonthsAgo.getTime() + i * 30 * 24 * 60 * 60 * 1000);
         transactions.push({
             id: `txn-income-${i}`,
