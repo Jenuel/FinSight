@@ -29,7 +29,8 @@ export const IS_API_MODE = DATA_SOURCE === 'api';
 let localServiceInstance: LocalStorageService | null = null;
 
 export function getDataService(getToken?: () => Promise<string | null>): DataService {
-    if (IS_API_MODE) {
+    const isGuest = typeof window !== 'undefined' && localStorage.getItem('finsight-guest-mode') === 'true';
+    if (IS_API_MODE && !isGuest) {
         if (!getToken) {
             throw new Error('getDataService: getToken is required when NEXT_PUBLIC_DATA_SOURCE=api');
         }
